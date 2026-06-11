@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070A18" />
+  <meta name="description" content="A private morning sleep check-in: sleep debt and energy schedule from your Apple Health data, computed entirely on your device." />
+  <title>Sleep Check-in</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <div class="sky" aria-hidden="true"></div>
+
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1 id="greeting">Good morning</h1>
+        <p class="sub" id="dateline"></p>
+      </div>
+      <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V19.6a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.12-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H4.4a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 6.05 7.4a1.7 1.7 0 0 0-.34-1.87l-.06-.06A2 2 0 1 1 8.48 2.64l.06.06a1.7 1.7 0 0 0 1.87.34h.08A1.7 1.7 0 0 0 11.5 1.48V1.4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.56 1.02h.15a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.57 1.03Z"/>
+        </svg>
+      </button>
+    </header>
+
+    <section id="empty" hidden>
+      <article class="card hero empty-hero">
+        <div class="moon" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="56" height="56" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="moonGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#8B9DFF"/><stop offset="1" stop-color="#FFB385"/>
+              </linearGradient>
+            </defs>
+            <path d="M42 8a26 26 0 1 0 14 34A22 22 0 0 1 42 8Z" stroke="url(#moonGrad)" stroke-width="2.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2>Your morning sleep check-in</h2>
+        <p class="lede">Run the Shortcut on your iPhone after you wake up. It reads your last 14 days of Apple Health sleep and opens this page with everything it needs — no account, no server, nothing stored anywhere but your device.</p>
+        <div class="btn-row">
+          <button class="btn primary" id="demo-btn">See it with demo data</button>
+          <a class="btn" href="https://github.com/thisconnor/sleeptracker-#set-up-the-iphone-shortcut" target="_blank" rel="noopener">Set up the Shortcut</a>
+        </div>
+      </article>
+      <article class="card">
+        <p class="card-label">Or paste instead</p>
+        <p class="sub">Paste the link the Shortcut produces (or just its data part):</p>
+        <textarea id="paste-box" rows="3" placeholder="https://…/#v=1&amp;d=…" spellcheck="false"></textarea>
+        <div class="btn-row">
+          <button class="btn" id="paste-btn">Load</button>
+        </div>
+        <p class="sub error" id="paste-error" hidden></p>
+      </article>
+    </section>
+
+    <section id="dashboard" hidden>
+      <article class="card hero">
+        <p class="card-label">Sleep debt</p>
+        <div class="gauge-wrap">
+          <div id="gauge" class="chart"></div>
+          <div class="gauge-center">
+            <div class="big-number" id="debt-number">–</div>
+            <div class="zone-label" id="debt-zone"></div>
+          </div>
+        </div>
+        <div class="hero-meta">
+          <span class="chip" id="energy-chip"></span>
+          <span class="chip dim" id="missing-chip" hidden></span>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <p class="card-label">Energy schedule</p>
+          <p class="sub" id="wake-line"></p>
+        </div>
+        <div id="energy-chart" class="chart"></div>
+        <ul id="zones-list" class="zones"></ul>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <p class="card-label">Last night</p>
+          <p class="sub" id="lastnight-date"></p>
+        </div>
+        <div id="lastnight-body"></div>
+      </article>
+
+      <article class="card">
+        <p class="card-label">Last 14 nights</p>
+        <div id="history-chart" class="chart"></div>
+        <p class="sub center" id="history-caption"></p>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <p class="card-label">Consistency</p>
+          <span class="chip" id="consistency-chip"></span>
+        </div>
+        <div id="consistency-chart" class="chart"></div>
+        <p class="sub center">Midpoint of each night's sleep — a tighter line means a steadier body clock.</p>
+      </article>
+
+      <p class="footnote" id="data-note"></p>
+    </section>
+
+    <footer class="footer">
+      <p>Your sleep data lives in this page's link after the&nbsp;# and is read entirely on this device — it is never sent to any server.</p>
+    </footer>
+  </main>
+
+  <dialog id="settings" class="sheet">
+    <div class="sheet-head">
+      <h2>Settings</h2>
+      <button class="icon-btn" id="settings-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
+    </div>
+
+    <div class="setting">
+      <p class="card-label">Sleep need</p>
+      <div class="stepper">
+        <button id="need-minus" class="step-btn" aria-label="Decrease by 15 minutes">−</button>
+        <span id="need-value" class="need-value">8h</span>
+        <button id="need-plus" class="step-btn" aria-label="Increase by 15 minutes">+</button>
+      </div>
+      <p class="sub" id="need-suggestion" hidden>
+        From your last two weeks, your longest typical nights suggest
+        <strong id="suggestion-value"></strong>.
+        <button class="btn small" id="use-suggestion">Use it</button>
+      </p>
+      <p class="sub">Sleep debt is measured against this nightly need.</p>
+    </div>
+
+    <div class="setting">
+      <p class="card-label">Make it permanent</p>
+      <p class="sub">Safari forgets settings after a week of no visits, so put your need inside the Shortcut's link — step 5 of the setup guide:</p>
+      <code class="snippet" id="url-snippet"></code>
+      <div class="btn-row">
+        <button class="btn small" id="copy-snippet">Copy</button>
+        <span class="sub" id="copy-done" hidden>Copied</span>
+      </div>
+    </div>
+
+    <div class="setting">
+      <p class="card-label">Data</p>
+      <div class="btn-row">
+        <button class="btn small" id="demo-btn-2">Load demo data</button>
+      </div>
+      <textarea id="paste-box-2" rows="2" placeholder="Paste a check-in link…" spellcheck="false"></textarea>
+      <div class="btn-row">
+        <button class="btn small" id="paste-btn-2">Load pasted data</button>
+        <span class="sub error" id="paste-error-2" hidden></span>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>
