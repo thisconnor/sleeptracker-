@@ -1,0 +1,8 @@
+{
+  "name": "sleep-checkin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/tests.js"
+  }
+}
