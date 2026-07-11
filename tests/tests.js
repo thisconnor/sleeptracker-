@@ -16,6 +16,8 @@ import {
 import { clampNeed, resolveNeed, DEFAULT_NEED_MIN } from '../js/settings.js';
 import { demoRows, makeDemoFragment, demoStoreRows } from '../js/demo.js';
 import { pickGreeting } from '../js/greeting.js';
+import { normalizeHandle, buildBoard } from '../js/social.js';
+import { goodZoneStreaks, celebrationFor } from '../js/streaks.js';
 import {
   hashInterval, sessionsToRows, mergeImport, applyEdit, makeManualRow,
   nightsFromRows, rowToJSON, rowFromJSON, reconcileTimer,
@@ -805,6 +807,67 @@ test('greeting: timer, bedtime proximity, and good-zone buckets', () => {
 test('greeting: picks are stable within a day', () => {
   const args = { name: 'A', now: D(2026, 7, 11, 15, 0), debtMin: 700 };
   assertEq(pickGreeting(args).quip, pickGreeting(args).quip);
+});
+
+// --------------------------------------------------------- streaks/social
+
+test('good-zone streaks count, break on gaps, and track the best run', () => {
+  const mk = (debts, data) => ({
+    nights: debts.map((_, i) => ({ hasData: data ? data[i] : true })),
+    series: debts,
+  });
+  const clean = mk([100, 200, 250, 400, 100, 100]);
+  assertEq(goodZoneStreaks(clean.nights, clean.series).current, 3, 'stops at the 400 reading');
+  assertEq(goodZoneStreaks(clean.nights, clean.series).best, 3);
+
+  const gap = mk([100, 100, 100], [false, true, true]);
+  assertEq(goodZoneStreaks(gap.nights, gap.series).current, 2, "today unsynced doesn't break yesterday's streak");
+
+  const broken = mk([100, 100, 100], [true, false, true]);
+  assertEq(goodZoneStreaks(broken.nights, broken.series).current, 1, 'a missing middle night breaks the run');
+
+  const longBest = mk([400, 100, 100, 100, 100, 400, 100]);
+  assertEq(goodZoneStreaks(longBest.nights, longBest.series).current, 0);
+  assertEq(goodZoneStreaks(longBest.nights, longBest.series).best, 4);
+});
+
+test('celebrations: zero debt and milestone streaks, once each', () => {
+  assertEq(celebrationFor({ debtMin: 10, streaks: { current: 0, best: 0 }, hasAnyData: true }).id, 'zero-debt');
+  assertEq(celebrationFor({ debtMin: 10, streaks: null, hasAnyData: false }), null, 'no data, no party');
+  const m = celebrationFor({ debtMin: 200, streaks: { current: 7, best: 7 }, hasAnyData: true });
+  assertEq(m.id, 'streak-7');
+  assert(/personal best/.test(m.message));
+  assertEq(celebrationFor({ debtMin: 200, streaks: { current: 6, best: 9 }, hasAnyData: true }), null, '6 is not a milestone');
+});
+
+test('handles normalize and validate', () => {
+  assertEq(normalizeHandle('@Connor_Sleeps'), 'connor_sleeps');
+  assertEq(normalizeHandle('  night_owl9 '), 'night_owl9');
+  assertEq(normalizeHandle('no'), null, 'too short');
+  assertEq(normalizeHandle('has spaces'), null);
+  assertEq(normalizeHandle('bad-dash'), null);
+});
+
+test('leaderboard ranks by debt, dims stale friends, ties share a rank', () => {
+  const now = D(2026, 7, 11, 9, 0);
+  const board = buildBoard({
+    me: { name: 'You', debtMin: 240, energy: 75 },
+    friends: [
+      { displayName: 'Alex', handle: 'alex', debtMin: 120, energy: 88, updatedAt: now.toISOString() },
+      { displayName: 'Sam', handle: 'sam', debtMin: 240, energy: 70, updatedAt: now.toISOString() },
+      { displayName: 'Old', handle: 'old', debtMin: 60, energy: 90, updatedAt: D(2026, 7, 5).toISOString() },
+      { displayName: 'Ghost', handle: 'ghost', debtMin: null },
+    ],
+    now,
+  });
+  assertEq(board.length, 4, 'friend with no stats is excluded');
+  assertEq(board[0].name, 'Alex');
+  assertEq(board[0].rank, 1);
+  assertEq(board[1].rank, 2);
+  assertEq(board[2].rank, 2, 'tied debt shares the rank');
+  assert(board[1].isMe || board[2].isMe);
+  assertEq(board[3].name, 'Old');
+  assertEq(board[3].stale, true, 'stale stats sink and get flagged');
 });
 
 // ------------------------------------------------------------------ done

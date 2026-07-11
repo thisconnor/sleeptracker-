@@ -156,6 +156,7 @@
         </div>
         <div class="hero-meta">
           <span class="chip" id="energy-chip"></span>
+          <span class="chip streak" id="streak-chip" hidden></span>
           <span class="chip dim" id="missing-chip" hidden></span>
         </div>
       </section>
@@ -206,6 +207,14 @@
           <p class="sub"><i class="dot dot-a"></i>sleep <i class="dot dot-b"></i>naps</p>
         </div>
         <div id="history-chart" class="chart chart-tips"></div>
+      </article>
+
+      <article class="card" id="friends-card" hidden>
+        <div class="card-head">
+          <p class="card-label">Friends</p>
+          <span class="sub" id="friends-sub"></span>
+        </div>
+        <div id="friends-body"></div>
       </article>
 
       <p class="footnote" id="data-note" hidden></p>
@@ -336,6 +345,11 @@
           <button data-mode="plain">Plain sum</button>
         </div>
         <p class="sub" id="debt-mode-note"></p>
+      </article>
+
+      <article class="card" id="social-card">
+        <p class="card-label">Friends</p>
+        <div id="social-body"></div>
       </article>
 
       <article class="card" id="cal-card">

@@ -136,6 +136,14 @@ export function renderToday(vm) {
   }
 
   $('energy-chip').innerHTML = `<span class="dot-glow"></span> Energy potential ${vm.energy}`;
+  const streak = $('streak-chip');
+  if (vm.streaks && vm.streaks.current >= 2) {
+    streak.hidden = false;
+    streak.innerHTML = `${icons.flame} ${vm.streaks.current}-night streak${
+      vm.streaks.best > vm.streaks.current ? ` <span class="sub">· best ${vm.streaks.best}</span>` : ''}`;
+  } else {
+    streak.hidden = true;
+  }
   const missing = $('missing-chip');
   missing.hidden = vm.missingCount === 0;
   if (vm.missingCount > 0) {
@@ -324,6 +332,132 @@ function renderLastNight(vm) {
     </div>` : ''}
     ${chips.length ? `<div class="ln-chips">${chips.map((c) => `<span class="chip dim">${c}</span>`).join('')}</div>` : ''}
     ${main?.hasStages ? stagebarHTML(main.stages) : ''}`;
+}
+
+// -------------------------------------------------------------- friends
+
+const boardRowHTML = (row) => `
+  <div class="board-row ${row.isMe ? 'me' : ''} ${row.stale ? 'stale' : ''}">
+    <span class="board-rank">${row.rank === 1 ? icons.trophy : row.rank}</span>
+    <span class="board-name">${esc(row.name)}${row.handle && !row.isMe ? ` <span class="sub">@${esc(row.handle)}</span>` : ''}
+      ${row.stale ? '<span class="sub"> · quiet lately</span>' : ''}</span>
+    <span class="board-nums">
+      <strong>${(row.debtMin / 60).toFixed(1)}h</strong>
+      ${row.energy != null ? `<span class="sub">${row.energy}</span>` : ''}
+    </span>
+  </div>`;
+
+// The Today leaderboard card. `social` is main.js's social state.
+export function renderFriends(vm, social) {
+  const card = $('friends-card');
+  const body = $('friends-body');
+  const sub = $('friends-sub');
+  card.hidden = false;
+  sub.textContent = '';
+
+  if (vm.isDemo || !social.supported) {
+    const board = social.demoBoard;
+    body.innerHTML = `
+      ${board.map(boardRowHTML).join('')}
+      <p class="sub">${social.supported
+    ? 'Sample board — sign in and add friends to race for real.'
+    : 'Sample board — friends go live once the backend is set up (README, 10 minutes).'}</p>`;
+    sub.textContent = 'preview';
+    return;
+  }
+  if (!social.user) {
+    body.innerHTML = `
+      <p class="sub">Race your friends to the good zone — lowest sleep debt leads the board. Only your debt and energy numbers are shared, never your sleep times.</p>
+      <div class="btn-row"><button class="btn primary small" data-action="go-auth">Sign in</button></div>`;
+    return;
+  }
+  if (!social.profile?.handle) {
+    body.innerHTML = `
+      <p class="sub">Pick a handle so friends can find you:</p>
+      <div class="handle-row">
+        <input id="handle-input" maxlength="20" placeholder="e.g. connor_sleeps" spellcheck="false" autocapitalize="off" />
+        <button class="btn primary small" data-action="save-handle">Claim</button>
+      </div>
+      <p class="sub error" id="handle-error" hidden></p>`;
+    return;
+  }
+
+  const incoming = social.connections?.incoming ?? [];
+  const board = social.board ?? [];
+  sub.innerHTML = `@${esc(social.profile.handle)}`;
+  body.innerHTML = `
+    ${incoming.length ? `<div class="pending-strip">${icons.friends} ${incoming.length} request${incoming.length === 1 ? '' : 's'} waiting
+      <button class="btn small" data-action="goto-settings">Review</button></div>` : ''}
+    ${board.length > 1
+    ? board.map(boardRowHTML).join('')
+    : `<p class="sub">No friends on the board yet — find them by handle in Settings → Friends.</p>`}
+    <div class="btn-row"><button class="btn small" data-action="goto-settings">${icons.friends} Manage friends</button></div>`;
+}
+
+// Settings → Friends management.
+export function renderSocialSettings(social) {
+  const body = $('social-body');
+  if (!social.supported) {
+    body.innerHTML = `<p class="sub">Friends need accounts — set up the backend (README, 10 minutes, free) and this turns on: find friends by handle, and compare sleep debt on the Today leaderboard. Only headline numbers are ever shared.</p>`;
+    return;
+  }
+  if (!social.user) {
+    body.innerHTML = `<p class="sub">Sign in to claim a handle and add friends.</p>`;
+    return;
+  }
+  const c = social.connections ?? { friends: [], incoming: [], outgoing: [] };
+  const handlePart = social.profile?.handle
+    ? `<div class="setting-row"><span>Your handle</span><span class="setting-controls"><code>@${esc(social.profile.handle)}</code></span></div>`
+    : `<p class="sub">Claim a handle so friends can find you:</p>
+       <div class="handle-row">
+         <input id="handle-input" maxlength="20" placeholder="e.g. connor_sleeps" spellcheck="false" autocapitalize="off" />
+         <button class="btn primary small" data-action="save-handle">Claim</button>
+       </div>
+       <p class="sub error" id="handle-error" hidden></p>`;
+
+  body.innerHTML = `
+    ${handlePart}
+    <p class="sub">Add a friend by their exact handle:</p>
+    <div class="handle-row">
+      <input id="friend-search" maxlength="20" placeholder="@their_handle" spellcheck="false" autocapitalize="off" />
+      <button class="btn small" data-action="friend-search">Find</button>
+    </div>
+    <div id="friend-search-result"></div>
+    ${c.incoming.length ? `<p class="card-label" style="margin-top:18px">Requests</p>` + c.incoming.map((f) => `
+      <div class="board-row">
+        <span class="board-name">${esc(f.displayName || f.handle)} <span class="sub">@${esc(f.handle)}</span></span>
+        <span class="setting-controls">
+          <button class="btn primary small" data-action="friend-accept" data-id="${esc(f.friendshipId)}">Accept</button>
+          <button class="btn small" data-action="friend-remove" data-id="${esc(f.friendshipId)}">Decline</button>
+        </span>
+      </div>`).join('') : ''}
+    ${c.outgoing.length ? `<p class="card-label" style="margin-top:18px">Sent</p>` + c.outgoing.map((f) => `
+      <div class="board-row">
+        <span class="board-name">@${esc(f.handle)} <span class="sub">pending</span></span>
+        <button class="btn small" data-action="friend-remove" data-id="${esc(f.friendshipId)}">Cancel</button>
+      </div>`).join('') : ''}
+    ${c.friends.length ? `<p class="card-label" style="margin-top:18px">Friends</p>` + c.friends.map((f) => `
+      <div class="board-row">
+        <span class="board-name">${esc(f.displayName || f.handle)} <span class="sub">@${esc(f.handle)}</span></span>
+        <button class="btn small" data-action="friend-remove" data-id="${esc(f.friendshipId)}">Remove</button>
+      </div>`).join('') : ''}
+    <p class="sub">Friends see your sleep-debt and energy numbers only — never your sleep times or log.</p>`;
+}
+
+export function friendSearchResult(result, error) {
+  const el = $('friend-search-result');
+  if (error) { el.innerHTML = `<p class="sub error">${esc(error)}</p>`; return; }
+  if (!result) { el.innerHTML = '<p class="sub">No one by that handle.</p>'; return; }
+  el.innerHTML = `
+    <div class="board-row">
+      <span class="board-name">${esc(result.displayName || result.handle)} <span class="sub">@${esc(result.handle)}</span></span>
+      <button class="btn primary small" data-action="friend-request" data-id="${esc(result.userId)}">${icons.plus} Add</button>
+    </div>`;
+}
+
+export function handleError(msg) {
+  const el = $('handle-error');
+  if (el) { el.textContent = msg ?? ''; el.hidden = !msg; }
 }
 
 // ---------------------------------------------------------------- sleep

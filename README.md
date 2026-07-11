@@ -19,6 +19,10 @@ A private sleep-debt and energy tracker in the spirit of RISE — rebuilt as you
 
 **Debt repayment**: *Auto* repays about a fifth of your debt per night (capped at +60 min) — and when your calendar is linked, it sizes tonight's extra sleep to the evening your last event actually leaves free (up to +90 min, never past your remaining debt). *Fixed* aims for the same nightly amount, set in Settings, until the debt is gone.
 
+**Friends & leaderboard** (needs the backend): claim a handle in Settings → Friends, find friends by their exact handle, and connect via request → accept. The Today leaderboard ranks you and your friends by sleep debt — lowest leads. Friends only ever see each other's headline numbers (debt and energy), never sleep times or logs; stats older than two days are dimmed as "quiet lately".
+
+**Streaks**: consecutive good-zone nights (≤5h debt, with sleep actually recorded) earn a streak chip on the hero — and zero-debt days and streak milestones (3, 7, 14, 21, 30…) get a small star-burst celebration, once per day at most.
+
 ## Setup
 
 ### 1. GitHub Pages (2 minutes)

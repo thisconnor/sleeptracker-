@@ -736,6 +736,103 @@ input[type="datetime-local"], input[type="time"] {
   font-style: normal;
 }
 
+/* ---------------------------------------------------------- friends board */
+
+.chip.streak { color: var(--glow); border-color: rgba(255, 179, 133, 0.35); }
+.chip.streak svg { width: 14px; height: 14px; }
+
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14.5px;
+}
+
+.board-row:last-of-type { border-bottom: none; }
+
+.board-row.me {
+  background: linear-gradient(90deg, rgba(139, 157, 255, 0.12), transparent 75%);
+  border-radius: 12px;
+  padding-left: 10px;
+  border-bottom-color: transparent;
+}
+
+.board-row.stale { opacity: 0.55; }
+
+.board-rank {
+  min-width: 26px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-rank svg { width: 17px; height: 17px; color: var(--glow); }
+
+.board-name { flex: 1; font-weight: 500; }
+.board-name .sub { margin: 0; font-size: 12px; }
+
+.board-nums {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-nums strong { font-size: 15.5px; font-weight: 600; }
+.board-nums .sub { margin: 0; font-size: 12px; }
+
+.pending-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 179, 133, 0.3);
+  background: rgba(255, 179, 133, 0.09);
+  font-size: 13.5px;
+}
+
+.pending-strip .btn { margin-left: auto; }
+.pending-strip svg { width: 16px; height: 16px; color: var(--glow); }
+
+.handle-row { display: flex; gap: 8px; margin-top: 10px; }
+
+.handle-row input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.handle-row input:focus { outline: 1.5px solid var(--accent); }
+
+/* ------------------------------------------------------------ celebration */
+
+.celebration {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 70;
+}
+
+.celebration .spark {
+  position: absolute;
+  font-size: 15px;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
+.spark-accent { color: var(--accent); text-shadow: 0 0 10px rgba(139, 157, 255, 0.9); }
+.spark-glow { color: var(--glow); text-shadow: 0 0 10px rgba(255, 179, 133, 0.9); font-size: 19px; }
+
 /* ------------------------------------------------------------- sleep log */
 
 .log-summary { display: flex; flex-wrap: wrap; gap: 8px; }

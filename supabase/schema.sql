@@ -58,3 +58,70 @@ create policy "own sessions" on public.sleep_sessions
 
 create policy "own settings" on public.settings
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ------------------------------------------------------------ social layer
+-- Friends find each other by exact handle, connect via request -> accept,
+-- and share ONLY the headline stats (debt + energy) — never raw sleep rows.
+
+create table public.handles (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  handle text unique not null check (handle ~ '^[a-z0-9_]{3,20}$'),
+  display_name text,
+  updated_at timestamptz not null default now()
+);
+
+create table public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references auth.users (id) on delete cascade,
+  addressee_id uuid not null references auth.users (id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'accepted')),
+  created_at timestamptz not null default now(),
+  unique (requester_id, addressee_id),
+  check (requester_id <> addressee_id)
+);
+
+create table public.shared_stats (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  debt_min integer not null,
+  energy integer,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.handles enable row level security;
+alter table public.friendships enable row level security;
+alter table public.shared_stats enable row level security;
+
+-- Handles are the discoverable identity: any signed-in user can look one up.
+create policy "handles searchable" on public.handles
+  for select to authenticated using (true);
+create policy "own handle insert" on public.handles
+  for insert with check (auth.uid() = user_id);
+create policy "own handle update" on public.handles
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Both parties see the friendship; only the requester creates it; only the
+-- addressee accepts; either side can sever it.
+create policy "own friendships" on public.friendships
+  for select using (auth.uid() in (requester_id, addressee_id));
+create policy "send request" on public.friendships
+  for insert with check (auth.uid() = requester_id);
+create policy "accept request" on public.friendships
+  for update using (auth.uid() = addressee_id) with check (auth.uid() = addressee_id);
+create policy "leave friendship" on public.friendships
+  for delete using (auth.uid() in (requester_id, addressee_id));
+
+-- Stats are visible to yourself and accepted friends only.
+create policy "stats visible to friends" on public.shared_stats
+  for select using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.friendships f
+      where f.status = 'accepted'
+        and ((f.requester_id = auth.uid() and f.addressee_id = shared_stats.user_id)
+          or (f.addressee_id = auth.uid() and f.requester_id = shared_stats.user_id))
+    )
+  );
+create policy "own stats insert" on public.shared_stats
+  for insert with check (auth.uid() = user_id);
+create policy "own stats update" on public.shared_stats
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
