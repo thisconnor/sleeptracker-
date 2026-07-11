@@ -14,6 +14,7 @@ import {
 } from './store.js';
 import { initApi, DEFAULT_SETTINGS } from './api.js';
 import * as cal from './calendar.js';
+import { pickGreeting } from './greeting.js';
 import * as ui from './ui/views.js';
 import { loadMotion, attachPressFeedback, dismissSplash as animatedSplashOut } from './ui/anim.js';
 
@@ -119,6 +120,18 @@ function render() {
   $('welcome-card').hidden = activeRows().some((r) => !r.deleted);
   if (state.view === 'today') {
     $('view-subtitle').textContent = ui.greetingSubtitle(vm.now, vm.freshness);
+    const name = state.settings.displayName?.trim()
+      || (state.user?.email ? state.user.email.split('@')[0] : null);
+    ui.setHeaderGreeting(pickGreeting({
+      name,
+      now: vm.now,
+      nights: vm.nights14,
+      plan: vm.plan,
+      schedule: vm.schedule,
+      timerKind: state.timer?.kind ?? null,
+      debtMin: vm.debtMin,
+      needMin: vm.needMin,
+    }));
     ui.renderLogNow(vm, state.timer);
     ui.renderToday(vm);
   } else if (state.view === 'sleep') {
