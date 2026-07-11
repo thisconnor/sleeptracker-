@@ -5,6 +5,7 @@ import { icons, icon } from './icons.js';
 import {
   countUp, drawIn, sweepGauge, replayEntrance, revealCards, motionReady,
 } from './anim.js';
+import { SCENES, moonSea } from './scenes.js';
 import {
   gaugeSVG, energyCurveSVG, durationBarsSVG, debtTrendSVG, sleepTimesSVG,
   dayMapSVG, stagebarHTML, attachChartTooltips, fmtDur, fmtClock,
@@ -31,6 +32,10 @@ export function showAuth({ backendNote }) {
   $('auth').hidden = false;
   $('app').hidden = true;
   $('auth-note').textContent = backendNote;
+  const scene = $('auth-scene');
+  if (!scene.innerHTML) {
+    scene.innerHTML = `<div class="scene on">${moonSea()}</div><div class="scene-vignette"></div>`;
+  }
 }
 
 export function showApp() {
@@ -83,6 +88,14 @@ export function toast(msg, kind = 'ok') {
   toastTimer = setTimeout(() => { el.hidden = true; }, 2800);
 }
 
+// Today's header: salutation as the title, quip across from the date.
+export function setHeaderGreeting({ salutation, quip } = {}) {
+  if (salutation) $('view-title').textContent = salutation;
+  const el = $('quip');
+  el.textContent = quip ?? '';
+  el.hidden = !quip;
+}
+
 export function greetingSubtitle(now, freshness) {
   let s = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   if (freshness) {
@@ -95,7 +108,11 @@ export function greetingSubtitle(now, freshness) {
 // ---------------------------------------------------------------- today
 
 export function renderToday(vm) {
-  // hero: debt
+  // hero: debt — the zone drives the card's whole treatment (aura color,
+  // number gradient, pulse at the extremes)
+  const hero = $('debt-hero');
+  hero.classList.remove('zone-good', 'zone-moderate', 'zone-high', 'zone-zero');
+  hero.classList.add(vm.debtMin < 60 ? 'zone-zero' : `zone-${vm.zone}`);
   const debtH = vm.debtMin / 60;
   countUp($('debt-number'), debtH, (v) => `${v.toFixed(1)}h`);
   const zoneText = { good: 'In the good zone', moderate: 'Moderate debt', high: 'High debt' };
@@ -477,6 +494,8 @@ export function renderSettings(state, vm) {
   } else {
     acct.innerHTML = `
       <div class="setting-row"><span>${icon('user')} Local mode</span></div>
+      <label class="field"><span>Your name</span>
+        <input id="display-name" value="${esc(s.displayName ?? '')}" placeholder="for the morning greeting" /></label>
       <p class="sub">No backend configured, so data lives in this browser. The README's "Set up the backend" section (10 minutes, free) enables accounts and sync.</p>`;
   }
 
@@ -634,18 +653,24 @@ export function showOnboarding({ canLogin }) {
   $('app').hidden = true;
   $('ob-skip').textContent = canLogin ? 'Log in' : 'Skip';
 
+  // One dusk scene per slide, crossfading as the carousel moves.
+  $('ob-scenes').innerHTML = SCENES
+    .map((scene, i) => `<div class="scene ${i === 0 ? 'on' : ''}">${scene()}</div>`)
+    .join('') + '<div class="scene-vignette"></div>';
+
   const track = $('ob-track');
   const slides = [...track.children];
   const dots = $('ob-dots');
   dots.innerHTML = slides.map((_, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('');
 
-  const syncDots = () => {
+  const sync = () => {
     const idx = obIndex();
     [...dots.children].forEach((d, i) => d.classList.toggle('on', i === idx));
+    document.querySelectorAll('#ob-scenes .scene').forEach((s, i) => s.classList.toggle('on', i === idx));
     $('ob-next').textContent = idx === slides.length - 1 ? "Let's get started" : 'Next';
   };
-  track.addEventListener('scroll', () => requestAnimationFrame(syncDots), { passive: true });
-  syncDots();
+  track.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
+  sync();
 }
 
 export function obIndex() {

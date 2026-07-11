@@ -15,6 +15,7 @@ import {
 } from '../js/schedule.js';
 import { clampNeed, resolveNeed, DEFAULT_NEED_MIN } from '../js/settings.js';
 import { demoRows, makeDemoFragment, demoStoreRows } from '../js/demo.js';
+import { pickGreeting } from '../js/greeting.js';
 import {
   hashInterval, sessionsToRows, mergeImport, applyEdit, makeManualRow,
   nightsFromRows, rowToJSON, rowFromJSON, reconcileTimer,
@@ -734,6 +735,76 @@ test('demoStoreRows builds weeks of coherent history', () => {
   const withStages = nights.filter((n) => n.mainSession?.hasStages).length;
   assert(withStages >= 30, 'watch demo carries stages');
   assertEq(demoStoreRows('watch', NOW, 42).length, rows.length, 'deterministic');
+});
+
+// -------------------------------------------------------------- greeting
+
+const gNight = (totalMin, { hasData = true, start = null, end = null, naps = [] } = {}) => ({
+  totalMin,
+  hasData,
+  naps,
+  mainSession: hasData && start ? {
+    start: start.getTime(), end: end.getTime(),
+  } : null,
+});
+
+test('greeting: salutation uses the name and time of day', () => {
+  const morning = pickGreeting({ name: 'Connor', now: D(2026, 7, 11, 8, 0) });
+  assertEq(morning.salutation, 'Morning, Connor');
+  assert(morning.quip.length > 0);
+  const anon = pickGreeting({ now: D(2026, 7, 11, 19, 0) });
+  assertEq(anon.salutation, 'Good evening');
+  const late = pickGreeting({ name: 'Connor', now: D(2026, 7, 11, 2, 30) });
+  assertEq(late.salutation, 'Still up, Connor?');
+});
+
+test('greeting: sarcastic buckets fire for all-nighters, lie-ins, late bedtimes', () => {
+  const now = D(2026, 7, 11, 9, 0);
+  const allNighter = pickGreeting({
+    now,
+    nights: [gNight(0, { hasData: false }), gNight(450, {
+      start: D(2026, 7, 9, 23, 0), end: D(2026, 7, 10, 6, 30),
+    })],
+  });
+  assert(/bold strategy|missing-persons|sleep on the job/i.test(allNighter.quip),
+    `all-nighter quip, got: ${allNighter.quip}`);
+
+  const lieIn = pickGreeting({
+    now,
+    needMin: 480,
+    nights: [gNight(640, { start: D(2026, 7, 10, 23, 0), end: D(2026, 7, 11, 9, 40) })],
+  });
+  assert(/mattress|hibernation|lap it/i.test(lieIn.quip), `long-sleep quip, got: ${lieIn.quip}`);
+
+  const nightOwl = pickGreeting({
+    now,
+    nights: [gNight(360, { start: D(2026, 7, 11, 2, 15), end: D(2026, 7, 11, 8, 15) })],
+  });
+  assert(/sequel|midnight|melatonin window sends/i.test(nightOwl.quip),
+    `late-night quip, got: ${nightOwl.quip}`);
+});
+
+test('greeting: timer, bedtime proximity, and good-zone buckets', () => {
+  const asleep = pickGreeting({ now: D(2026, 7, 11, 23, 30), timerKind: 'sleep' });
+  assert(/eyes closed|instead of sleeping|sleeping part/i.test(asleep.quip));
+
+  const nearBed = pickGreeting({
+    now: D(2026, 7, 11, 21, 45),
+    plan: { bedtime: D(2026, 7, 11, 22, 30) },
+    nights: [gNight(480, { start: D(2026, 7, 10, 23, 0), end: D(2026, 7, 11, 7, 0) })],
+  });
+  assert(/wind-down|bedtime|melatonin/i.test(nearBed.quip), `near-bed quip, got: ${nearBed.quip}`);
+
+  const pastBed = pickGreeting({
+    now: D(2026, 7, 11, 23, 55),
+    plan: { bedtime: D(2026, 7, 11, 22, 30) },
+  });
+  assert(/just saying|taking notes|waved goodbye/i.test(pastBed.quip), `past-bed quip, got: ${pastBed.quip}`);
+});
+
+test('greeting: picks are stable within a day', () => {
+  const args = { name: 'A', now: D(2026, 7, 11, 15, 0), debtMin: 700 };
+  assertEq(pickGreeting(args).quip, pickGreeting(args).quip);
 });
 
 // ------------------------------------------------------------------ done
