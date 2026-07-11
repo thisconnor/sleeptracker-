@@ -1,6 +1,9 @@
-// demo.js — synthetic datasets, emitted as raw d= rows so demo mode
-// exercises the exact same parse path as real Shortcut data.
-// Pure module: no DOM access.
+// demo.js — synthetic datasets. demoRows() emits raw d= rows (exercising
+// the real parse path, used by tests and pasted-link demos);
+// demoStoreRows() emits ready store rows across ~6 weeks so the demo's
+// Trends tab has history. Pure module: no DOM access.
+
+import { hashInterval, makeLocalId } from './store.js';
 
 const MS_PER_MIN = 60000;
 
@@ -118,4 +121,57 @@ export function demoRows(kind = 'watch', now = new Date()) {
 
 export function makeDemoFragment(kind = 'watch', now = new Date()) {
   return `v=1&d=${encodeURIComponent(demoRows(kind, now))}`;
+}
+
+// Six weeks of store rows for the in-app demo. Weekends drift later and
+// longer; one rough stretch three weeks back; occasional naps and gaps.
+export function demoStoreRows(kind = 'watch', now = new Date(), days = 42) {
+  const rnd = mulberry32(kind === 'iphone' ? 71 : 421);
+  const rows = [];
+  const push = (start, end, rowKind, stages = null, asleepMin = null) => {
+    rows.push({
+      id: makeLocalId(),
+      start,
+      end,
+      kind: rowKind,
+      asleepMin: Math.round(asleepMin ?? (end - start) / MS_PER_MIN),
+      inBedMin: rowKind === 'sleep' ? Math.round((end - start) / MS_PER_MIN + 14) : null,
+      stages,
+      source: 'import',
+      importHash: hashInterval(start, end),
+      deleted: false,
+    });
+  };
+
+  for (let i = days - 1; i >= 0; i--) {
+    if (i !== 0 && rnd() < 0.07) continue; // forgot to track
+    const wakeDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const weekend = [0, 6].includes(wakeDay.getDay());
+    const rough = i >= 19 && i <= 24; // a bad week, three weeks back
+    let wakeMin = 6 * 60 + 35 + Math.floor(rnd() * 35) + (weekend ? 55 : 0);
+    let durMin = 7 * 60 + 5 + Math.floor(rnd() * 75) + (weekend ? 35 : 0);
+    if (rough) durMin -= 75 + Math.floor(rnd() * 40);
+    if (i === 2) durMin += 65; // recent recovery oversleep
+    const wake = addMin(wakeDay, wakeMin);
+    const start = addMin(wake, -durMin);
+
+    if (kind === 'watch') {
+      const awake = 8 + Math.floor(rnd() * 14);
+      const asleep = durMin - awake;
+      push(start, wake, 'sleep', {
+        core: Math.round(asleep * 0.55),
+        deep: Math.round(asleep * 0.19),
+        rem: Math.round(asleep * 0.26),
+        awake,
+      }, asleep);
+    } else {
+      push(start, wake, 'sleep', null, durMin - 5);
+    }
+
+    if ((rough && rnd() < 0.5) || rnd() < 0.12) {
+      const napStart = addMin(wakeDay, 13 * 60 + 40 + Math.floor(rnd() * 90));
+      push(napStart, addMin(napStart, 25 + Math.floor(rnd() * 35)), 'nap');
+    }
+  }
+  return rows;
 }

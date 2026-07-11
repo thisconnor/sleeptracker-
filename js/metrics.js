@@ -10,7 +10,14 @@
 export const DEBT_GOOD_MAX_MIN = 5 * 60;
 export const DEBT_MODERATE_MAX_MIN = 10 * 60;
 
-export function sleepDebtMin(nights, needMin) {
+// mode 'weighted' = RISE-style recency weighting (default);
+// mode 'plain'    = literal cumulative sum of the last-14-night deficits.
+export function sleepDebtMin(nights, needMin, mode = 'weighted') {
+  if (mode === 'plain') {
+    let total = 0;
+    for (const n of nights) if (n.hasData) total += needMin - n.totalMin;
+    return Math.max(0, total);
+  }
   let weighted = 0;
   let sumW = 0;
   for (let i = 0; i < nights.length; i++) {
@@ -30,15 +37,15 @@ export function debtZone(debtMin) {
 
 // Debt as of each day in the window (for the trend line). Index matches
 // nights[]: series[i] = debt computed the morning of nights[i].date, using
-// the nights visible at that point (older nights beyond the data are
+// a full 14-night window ending that day (nights beyond the data are
 // treated as missing).
-export function debtSeries(nights, needMin) {
+export function debtSeries(nights, needMin, mode = 'weighted', windowSize = 14) {
   return nights.map((_, i) => {
     const window = [];
-    for (let j = 0; j < nights.length; j++) {
+    for (let j = 0; j < windowSize; j++) {
       window.push(nights[i + j] ?? { hasData: false, totalMin: 0 });
     }
-    return sleepDebtMin(window, needMin);
+    return sleepDebtMin(window, needMin, mode);
   });
 }
 
