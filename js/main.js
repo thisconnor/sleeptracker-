@@ -189,20 +189,29 @@ async function loadSocial() {
   }
 }
 
-// Share the headline numbers with friends at most every 30 minutes.
+// Share the headline numbers with friends at most every 30 minutes
+// (throttled per account — profiles can share a browser).
 function pushStatsThrottled(vm) {
   if (!state.api.social?.supported || !state.user || !state.social.profile?.handle || isDemo()) return;
-  const last = Number(safeGet(STATS_PUSH_KEY) ?? 0);
+  const key = `${STATS_PUSH_KEY}:${state.user.id}`;
+  const last = Number(safeGet(key) ?? 0);
   if (Date.now() - last < 30 * 60000) return;
-  safeSet(STATS_PUSH_KEY, String(Date.now()));
+  safeSet(key, String(Date.now()));
   state.api.social.pushStats({ debtMin: vm.debtMin, energy: vm.energy }).catch(() => {});
 }
 
-async function saveHandle() {
-  const input = $('handle-input');
+// The claim UI renders in both the Today friends card and Settings, so
+// resolve the input and error line relative to the button that was tapped.
+async function saveHandle(btn) {
+  const row = btn.closest('.handle-row');
+  const input = row?.querySelector('input');
+  const errEl = row?.parentElement.querySelector('.error');
+  const showErr = (msg) => {
+    if (errEl) { errEl.textContent = msg ?? ''; errEl.hidden = !msg; }
+  };
   const handle = normalizeHandle(input?.value);
   if (!handle) {
-    ui.handleError('3–20 characters: letters, numbers, underscores.');
+    showErr('3–20 characters: letters, numbers, underscores.');
     return;
   }
   try {
@@ -211,7 +220,7 @@ async function saveHandle() {
     ui.toast(`You're @${handle}`);
     render();
   } catch (err) {
-    ui.handleError(err.message);
+    showErr(err.message);
   }
 }
 
@@ -281,16 +290,21 @@ function samplesToImportRows(samples) {
 
 async function importRows(incoming, { announce = true } = {}) {
   const fresh = mergeImport(state.rows, incoming);
-  if (fresh.length) {
-    await state.api.rows.insert(fresh);
-    await reloadRows();
+  try {
+    if (fresh.length) {
+      await state.api.rows.insert(fresh);
+      await reloadRows();
+    }
+    if (announce) {
+      ui.toast(fresh.length
+        ? `Synced ${fresh.length} new session${fresh.length === 1 ? '' : 's'}`
+        : 'Already up to date');
+    }
+    return fresh.length;
+  } catch (err) {
+    ui.toast(`Sync failed: ${err.message}`, 'warn');
+    return 0;
   }
-  if (announce) {
-    ui.toast(fresh.length
-      ? `Synced ${fresh.length} new session${fresh.length === 1 ? '' : 's'}`
-      : 'Already up to date');
-  }
-  return fresh.length;
 }
 
 // Process the URL fragment: demo, need setting, and/or sleep data.
@@ -476,7 +490,7 @@ function bindEvents() {
     else if (a === 'trend-rows-more') { state.trendRowsExpanded = true; render(); }
     else if (a === 'trend-rows-less') { state.trendRowsExpanded = false; render(); }
     else if (a === 'goto-settings') switchView('settings');
-    else if (a === 'save-handle') saveHandle();
+    else if (a === 'save-handle') saveHandle(el);
     else if (a === 'friend-search') friendSearch();
     else if (a === 'friend-request') friendAction('request', el.dataset.id);
     else if (a === 'friend-accept') friendAction('accept', el.dataset.id);
@@ -522,6 +536,12 @@ function bindEvents() {
     await authAction(async () => {
       await state.api.auth.resetPassword(email);
       ui.authInfo('Password reset email sent.');
+    });
+  });
+  $('auth-google').addEventListener('click', async () => {
+    await authAction(async () => {
+      await state.api.auth.signInGoogle();
+      // signInGoogle navigates away on success; an error lands here.
     });
   });
   $('auth-guest').addEventListener('click', async () => {

@@ -191,6 +191,13 @@ async function makeSupabaseApi() {
         });
         bail(error);
       },
+      async signInGoogle() {
+        const { error } = await client.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: location.origin + location.pathname },
+        });
+        bail(error);
+      },
       async resetPassword(email) {
         const { error } = await client.auth.resetPasswordForEmail(email, {
           redirectTo: location.origin + location.pathname,
@@ -214,10 +221,20 @@ async function makeSupabaseApi() {
         if (!rows.length) return [];
         const userId = await uid();
         const payload = rows.map((r) => ({ ...toDb(r), user_id: userId }));
-        const { data, error } = await client
-          .from('sleep_sessions')
-          .upsert(payload, { onConflict: 'user_id,import_hash', ignoreDuplicates: true })
-          .select();
+        // Plain insert: mergeImport() already de-duplicates client-side, and
+        // the partial unique index on (user_id, import_hash) backstops races
+        // (e.g. two devices syncing at once). On a duplicate collision, fall
+        // back to row-by-row so the non-duplicates still land.
+        const { data, error } = await client.from('sleep_sessions').insert(payload).select();
+        if (error?.code === '23505') {
+          const kept = [];
+          for (const row of payload) {
+            const one = await client.from('sleep_sessions').insert(row).select();
+            if (one.error && one.error.code !== '23505') bail(one.error);
+            if (one.data?.length) kept.push(one.data[0]);
+          }
+          return kept.map(fromDb);
+        }
         bail(error);
         return (data ?? []).map(fromDb);
       },
