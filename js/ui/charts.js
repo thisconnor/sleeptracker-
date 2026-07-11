@@ -170,7 +170,16 @@ export function energyCurveSVG({ points, zones, now, napSlot = null }) {
 
 // -------------------------------------------- duration bars (any range)
 
-export function durationBarsSVG(nights, needMin, { height = 172, labelEvery = 1 } = {}) {
+// Trailing 7-night average (missing nights skipped, needs >=3 real nights).
+function movingAvg(chrono, window = 7) {
+  return chrono.map((_, i) => {
+    const slice = chrono.slice(Math.max(0, i - window + 1), i + 1).filter((n) => n.hasData);
+    if (slice.length < 3) return null;
+    return slice.reduce((t, n) => t + n.totalMin, 0) / slice.length;
+  });
+}
+
+export function durationBarsSVG(nights, needMin, { height = 172, labelEvery = 1, detail = false } = {}) {
   const H = height;
   const top = 16;
   const bottom = H - 32;
@@ -222,19 +231,45 @@ export function durationBarsSVG(nights, needMin, { height = 172, labelEvery = 1 
     }
   }
 
+  let overlay = '';
+  if (detail) {
+    const avg = movingAvg(chrono);
+    const pts = avg
+      .map((v, i) => (v == null ? null : `${cx(i).toFixed(1)},${y(v).toFixed(1)}`))
+      .filter(Boolean);
+    if (pts.length > 1) {
+      const lastVal = [...avg].reverse().find((v) => v != null);
+      overlay = `
+        <polyline points="${pts.join(' ')}" fill="none" stroke="rgba(255,255,255,0.75)"
+          stroke-width="1.6" stroke-linejoin="round"/>
+        <text x="${x1}" y="${(y(lastVal) - 6).toFixed(1)}" text-anchor="end" font-size="9"
+          fill="rgba(255,255,255,0.75)">7-night avg ${fmtDur(lastVal)}</text>`;
+    }
+    const withData = chrono.map((n, i) => ({ n, i })).filter(({ n }) => n.hasData);
+    if (withData.length >= 4) {
+      const best = withData.reduce((a, b) => (b.n.totalMin > a.n.totalMin ? b : a));
+      const worst = withData.reduce((a, b) => (b.n.totalMin < a.n.totalMin ? b : a));
+      for (const { n: night, i } of [best, worst]) {
+        overlay += `<text x="${cx(i).toFixed(1)}" y="${(y(night.totalMin) - 5).toFixed(1)}" text-anchor="middle"
+          font-size="8.5" fill="${INK_FAINT}">${fmtDur(night.totalMin)}</text>`;
+      }
+    }
+  }
+
   return `
     <svg viewBox="0 0 ${CHART_W} ${H}" role="img" aria-label="Nightly sleep vs need">
       <line x1="${x0}" y1="${y(needMin).toFixed(1)}" x2="${x1}" y2="${y(needMin).toFixed(1)}"
         stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="5 4"/>
       <text x="${x0 - 5}" y="${(y(needMin) + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="${INK_FAINT}">need</text>
       ${bars}
+      ${overlay}
       ${labels}
     </svg>`;
 }
 
 // ------------------------------------------------------ debt trend line
 
-export function debtTrendSVG(series, nights, { height = 150 } = {}) {
+export function debtTrendSVG(series, nights, { height = 150, detail = false } = {}) {
   const H = height;
   const top = 14;
   const bottom = H - 30;
@@ -263,20 +298,36 @@ export function debtTrendSVG(series, nights, { height = 150 } = {}) {
           <stop offset="1" stop-color="${MARK_B}" stop-opacity="0"/>
         </linearGradient>
       </defs>
+      ${detail ? `<rect x="${x0}" y="${goodY.toFixed(1)}" width="${x1 - x0}" height="${(bottom - goodY).toFixed(1)}"
+        fill="rgba(139,157,255,0.07)"/>
+      <text x="${x1 - 4}" y="${(bottom - 5).toFixed(1)}" text-anchor="end" font-size="8.5"
+        fill="rgba(139,157,255,0.6)">good zone</text>` : ''}
       <line x1="${x0}" y1="${goodY.toFixed(1)}" x2="${x1}" y2="${goodY.toFixed(1)}"
         stroke="rgba(255,255,255,0.3)" stroke-width="1" stroke-dasharray="5 4"/>
       <text x="${x0 - 5}" y="${(goodY + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="${INK_FAINT}">5h</text>
       <path d="${area}" fill="url(#debtFill)"/>
       <path class="curve-line" d="${line}" fill="none" stroke="${MARK_B}" stroke-width="2" stroke-linejoin="round"/>
+      ${detail ? peakMarker(chronoSeries, cx, y) : ''}
       ${hits}
     </svg>`;
+}
+
+function peakMarker(chronoSeries, cx, y) {
+  let maxI = 0;
+  chronoSeries.forEach((v, i) => { if (v > chronoSeries[maxI]) maxI = i; });
+  const v = chronoSeries[maxI];
+  if (v < 60) return '';
+  return `<circle cx="${cx(maxI).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.4" fill="${MARK_B}"
+      stroke="rgba(255,255,255,0.85)" stroke-width="1.4"/>
+    <text x="${cx(maxI).toFixed(1)}" y="${(y(v) - 8).toFixed(1)}" text-anchor="middle" font-size="9"
+      fill="rgba(255,255,255,0.75)">peak ${(v / 60).toFixed(1)}h</text>`;
 }
 
 // -------------------------------------------------- sleep times (bands)
 
 // Each night as a vertical capsule from bedtime to wake on an 8 PM -> noon
 // axis; naps as dots. The tightness of the band IS the consistency story.
-export function sleepTimesSVG(nights, { height = 190 } = {}) {
+export function sleepTimesSVG(nights, { height = 190, detail = false } = {}) {
   const H = height;
   const top = 14;
   const bottom = H - 30;
@@ -300,9 +351,18 @@ export function sleepTimesSVG(nights, { height = 190 } = {}) {
         <text x="${x0 - 5}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="${INK_FAINT}">${t}</text>`;
     }).join('');
 
+  let underlay = '';
   let marks = '';
+  const midPts = [];
   for (let i = 0; i < n; i++) {
     const night = chrono[i];
+    if (detail && [0, 6].includes(night.date.getDay())) {
+      underlay += `<rect x="${(cx(i) - slot / 2).toFixed(1)}" y="${top}" width="${slot.toFixed(1)}"
+        height="${bottom - top}" fill="rgba(255,255,255,0.045)"/>`;
+    }
+    if (detail && night.mainSession) {
+      midPts.push(`${cx(i).toFixed(1)},${yOf(night.mainSession.midMin).toFixed(1)}`);
+    }
     const main = night.mainSession;
     if (main) {
       const yTop = yOf(minuteOfDayLocal(new Date(main.start)));
@@ -319,9 +379,16 @@ export function sleepTimesSVG(nights, { height = 190 } = {}) {
     }
   }
 
+  const drift = detail && midPts.length > 1
+    ? `<polyline points="${midPts.join(' ')}" fill="none" stroke="${GLOW}" stroke-width="1.2"
+        stroke-dasharray="2 3" opacity="0.7"/>`
+    : '';
+
   return `
     <svg viewBox="0 0 ${CHART_W} ${H}" role="img" aria-label="Sleep timing by night">
+      ${underlay}
       ${guides}
+      ${drift}
       ${marks}
     </svg>`;
 }

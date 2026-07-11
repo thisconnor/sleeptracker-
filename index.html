@@ -105,6 +105,14 @@
         </div>
       </article>
 
+      <article class="card" id="lognow-card" hidden>
+        <div class="card-head">
+          <p class="card-label">Log now</p>
+          <p class="sub" id="lognow-sub"></p>
+        </div>
+        <div id="lognow-body"></div>
+      </article>
+
       <article class="card" id="tonight-card">
         <p class="card-label">Tonight</p>
         <div class="tonight-grid" id="tonight-grid"></div>
@@ -156,10 +164,16 @@
 
     <!-- ------------------------------------------------------ Trends -->
     <section id="view-trends" class="view" hidden>
-      <div class="segmented" id="trend-range" role="tablist" aria-label="Range">
-        <button data-range="14" class="active" role="tab">2 weeks</button>
-        <button data-range="30" role="tab">30 days</button>
-        <button data-range="90" role="tab">90 days</button>
+      <div class="trend-controls">
+        <div class="segmented" id="trend-range" role="tablist" aria-label="Range">
+          <button data-range="14" class="active" role="tab">2 weeks</button>
+          <button data-range="30" role="tab">30 days</button>
+          <button data-range="90" role="tab">90 days</button>
+        </div>
+        <div class="segmented" id="trend-detail" role="tablist" aria-label="Detail">
+          <button data-detail="clean" class="active" role="tab">Clean</button>
+          <button data-detail="advanced" role="tab">Detailed</button>
+        </div>
       </div>
       <div id="trend-stats" class="stat-row"></div>
       <article class="card">
@@ -227,6 +241,33 @@
             <button id="prep-plus" class="step-btn sm" aria-label="More">+</button>
           </span>
         </div>
+        <div class="setting-row">
+          <span>Debt repayment</span>
+          <span class="setting-controls">
+            <div class="segmented" id="repay-mode">
+              <button data-repay="auto" class="active">Auto</button>
+              <button data-repay="fixed">Fixed</button>
+            </div>
+          </span>
+        </div>
+        <div class="setting-row" id="repay-fixed-row" hidden>
+          <span>Repay per night</span>
+          <span class="setting-controls stepper-mini">
+            <button id="repay-minus" class="step-btn sm" aria-label="Less">−</button>
+            <span id="repay-value">30m</span>
+            <button id="repay-plus" class="step-btn sm" aria-label="More">+</button>
+          </span>
+        </div>
+        <p class="sub" id="repay-note"></p>
+        <div class="setting-row">
+          <span>Fall-asleep margin</span>
+          <span class="setting-controls stepper-mini">
+            <button id="margin-minus" class="step-btn sm" aria-label="Less">−</button>
+            <span id="margin-value">15m</span>
+            <button id="margin-plus" class="step-btn sm" aria-label="More">+</button>
+          </span>
+        </div>
+        <p class="sub">The margin is added after you tap "Going to sleep" — it covers the time it takes you to actually fall asleep.</p>
       </article>
 
       <article class="card">
@@ -292,6 +333,7 @@
         <input type="datetime-local" id="edit-end" required />
       </label>
       <p class="sub" id="edit-duration"></p>
+      <p class="sub" id="edit-note" hidden></p>
       <p class="sub error" id="edit-error" hidden></p>
       <div class="btn-row spread">
         <button type="button" class="btn danger small" id="edit-delete" hidden>Delete</button>

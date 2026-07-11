@@ -138,6 +138,38 @@ export function renderToday(vm) {
   $('data-note').hidden = notes.length === 0;
 }
 
+export function renderLogNow(vm, timer) {
+  const card = $('lognow-card');
+  if (vm.isDemo) { card.hidden = true; return; }
+  card.hidden = false;
+  const body = $('lognow-body');
+  const sub = $('lognow-sub');
+  if (!timer) {
+    sub.textContent = '';
+    body.innerHTML = `
+      <div class="btn-row lognow-idle">
+        <button class="btn primary" data-action="timer-start" data-kind="sleep">${icons.moon} Going to sleep</button>
+        <button class="btn" data-action="timer-start" data-kind="nap">${icons.nap} Starting a nap</button>
+      </div>
+      <p class="sub">One tap now, one when you wake. Your ${fmtDur(vm.marginMin)} fall-asleep margin is applied automatically, and you confirm the times before anything is saved.</p>`;
+  } else {
+    const started = new Date(timer.startedAt);
+    const elapsed = Math.max(1, (vm.now - started) / 60000);
+    sub.innerHTML = `<span class="live-dot"></span> live`;
+    body.innerHTML = `
+      <div class="lognow-active">
+        <div>
+          <div class="tile-value">${timer.kind === 'nap' ? 'Napping' : 'Sleeping'} · ${fmtDur(elapsed)}</div>
+          <div class="sub">since ${fmtClock(started)}</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" data-action="timer-finish">${icons.sun} I'm awake</button>
+          <button class="btn small" data-action="timer-discard">Discard</button>
+        </div>
+      </div>`;
+  }
+}
+
 function renderTonight(vm) {
   const { plan, schedule } = vm;
   const caffeinePassed = vm.now > plan.caffeineCutoff;
@@ -166,9 +198,16 @@ function renderTonight(vm) {
     </div>`;
 
   const mel = schedule.zones.find((z) => z.id === 'melatonin');
+  const basisText = {
+    fixed: 'your nightly setting',
+    'auto-calendar': 'sized to your free evening',
+    auto: 'auto pacing',
+  }[plan.repayBasis] ?? 'auto pacing';
   const parts = [];
   if (plan.extraMin > 0) {
-    parts.push(`Tonight repays ${plan.extraMin} min of debt (${fmtDur(plan.sleepMin)} total ahead of a ${fmtClock(plan.wakeTarget)} wake).`);
+    parts.push(`Tonight repays ${plan.extraMin} min of debt — ${basisText} — for ${fmtDur(plan.sleepMin)} ahead of a ${fmtClock(plan.wakeTarget)} wake.`);
+  } else if (vm.debtMin > 30 && plan.repayBasis === 'auto-calendar') {
+    parts.push(`Your evening is too tight to repay debt tonight — ${fmtDur(plan.sleepMin)} ahead of a ${fmtClock(plan.wakeTarget)} wake holds the line.`);
   } else {
     parts.push(`No debt to repay — ${fmtDur(plan.sleepMin)} ahead of a ${fmtClock(plan.wakeTarget)} wake keeps you level.`);
   }
@@ -322,10 +361,14 @@ export function renderSleepLog(vm) {
 
 // --------------------------------------------------------------- trends
 
-export function renderTrends(vm, rangeDays) {
+export function renderTrends(vm, rangeDays, detail = 'clean') {
   for (const b of document.querySelectorAll('#trend-range button')) {
     b.classList.toggle('active', Number(b.dataset.range) === rangeDays);
   }
+  for (const b of document.querySelectorAll('#trend-detail button')) {
+    b.classList.toggle('active', b.dataset.detail === detail);
+  }
+  const advanced = detail === 'advanced';
   // Trim the window to where data actually exists (min two weeks) so a
   // young log doesn't render 90 days of emptiness.
   let nights = vm.nightsLong.slice(0, rangeDays);
@@ -342,16 +385,17 @@ export function renderTrends(vm, rangeDays) {
     <div class="stat"><span class="stat-v">${(avgDebt / 60).toFixed(1)}h</span><span class="stat-l">avg debt</span></div>
     <div class="stat"><span class="stat-v">${withData.length}<span class="stat-dim">/${nights.length}</span></span><span class="stat-l">nights logged</span></div>`;
 
-  $('trend-debt').innerHTML = debtTrendSVG(series, nights);
+  $('trend-debt').innerHTML = debtTrendSVG(series, nights, { detail: advanced });
   drawIn($('trend-debt').querySelector('.curve-line'), 700);
   attachChartTooltips($('trend-debt'));
 
   $('trend-duration').innerHTML = durationBarsSVG(nights, vm.needMin, {
     labelEvery: nights.length > 30 ? 14 : nights.length > 14 ? 5 : 1,
+    detail: advanced,
   });
   attachChartTooltips($('trend-duration'));
 
-  $('trend-times').innerHTML = sleepTimesSVG(nights);
+  $('trend-times').innerHTML = sleepTimesSVG(nights, { detail: advanced });
   attachChartTooltips($('trend-times'));
   $('consistency-chip').textContent = vm.consistency ? `${vm.consistency.score} / 100` : 'needs more nights';
 }
@@ -404,6 +448,19 @@ export function renderSettings(state, vm) {
   $('prep-row').hidden = !state.calendarConfigured;
   $('prep-value').textContent = `${s.prepBufferMin}m`;
 
+  // repayment + fall-asleep margin
+  for (const b of document.querySelectorAll('#repay-mode button')) {
+    b.classList.toggle('active', b.dataset.repay === s.repayMode);
+  }
+  $('repay-fixed-row').hidden = s.repayMode !== 'fixed';
+  $('repay-value').textContent = fmtDur(s.repayFixedMin);
+  $('repay-note').textContent = s.repayMode === 'fixed'
+    ? `Every night aims for +${fmtDur(s.repayFixedMin)} beyond your need until the debt is gone.`
+    : state.calendar.linked
+      ? 'Auto sizes tonight’s extra sleep to your debt and to the evening your calendar actually leaves free.'
+      : 'Auto repays about a fifth of your debt per night, capped at an hour. Link your calendar to size it to your real evenings.';
+  $('margin-value').textContent = `${s.sleepOnsetMarginMin}m`;
+
   // debt model
   for (const b of document.querySelectorAll('#debt-mode button')) {
     b.classList.toggle('active', b.dataset.mode === s.debtMode);
@@ -441,18 +498,23 @@ const toLocalInput = (d) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-export function openEditor({ row = null, defaultDateKey = null, now = new Date() }) {
+export function openEditor({ row = null, defaultDateKey = null, prefill = null, note = null, title = null, now = new Date() }) {
   const dlg = $('editor');
   const isNew = !row;
-  $('editor-title').textContent = isNew ? 'Add sleep' : row.kind === 'nap' ? 'Edit nap' : 'Edit sleep';
+  $('editor-title').textContent = title
+    ?? (isNew ? 'Add sleep' : row.kind === 'nap' ? 'Edit nap' : 'Edit sleep');
   $('edit-delete').hidden = isNew;
   $('edit-error').hidden = true;
+  $('edit-note').textContent = note ?? '';
+  $('edit-note').hidden = !note;
 
   let start;
   let end;
   let kind;
   if (row) {
     start = row.start; end = row.end; kind = row.kind;
+  } else if (prefill) {
+    start = prefill.start; end = prefill.end; kind = prefill.kind ?? 'sleep';
   } else if (defaultDateKey) {
     const [y, m, d] = defaultDateKey.split('-').map(Number);
     end = new Date(y, m - 1, d, 7, 0);

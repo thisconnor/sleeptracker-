@@ -40,6 +40,9 @@ create table public.settings (
   wake_target_min integer,
   prep_buffer_min integer not null default 60,
   debt_mode text not null default 'weighted' check (debt_mode in ('weighted', 'plain')),
+  sleep_onset_margin_min integer not null default 15,
+  repay_mode text not null default 'auto' check (repay_mode in ('auto', 'fixed')),
+  repay_fixed_min integer not null default 30,
   updated_at timestamptz not null default now()
 );
 
