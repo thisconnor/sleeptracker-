@@ -22,6 +22,8 @@ export const DEFAULT_SETTINGS = {
   sleepOnsetMarginMin: 15,
   repayMode: 'auto',
   repayFixedMin: 30,
+  timerStartedAt: null,
+  timerKind: null,
 };
 
 function safeGet(key) {
@@ -126,6 +128,8 @@ const settingsFromDb = (d) => ({
   sleepOnsetMarginMin: d.sleep_onset_margin_min,
   repayMode: d.repay_mode,
   repayFixedMin: d.repay_fixed_min,
+  timerStartedAt: d.timer_started_at,
+  timerKind: d.timer_kind,
 });
 
 const settingsToDb = (s) => {
@@ -139,6 +143,8 @@ const settingsToDb = (s) => {
   if ('sleepOnsetMarginMin' in s) out.sleep_onset_margin_min = s.sleepOnsetMarginMin;
   if ('repayMode' in s) out.repay_mode = s.repayMode;
   if ('repayFixedMin' in s) out.repay_fixed_min = s.repayFixedMin;
+  if ('timerStartedAt' in s) out.timer_started_at = s.timerStartedAt;
+  if ('timerKind' in s) out.timer_kind = s.timerKind;
   return out;
 };
 

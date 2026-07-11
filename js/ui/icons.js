@@ -34,6 +34,8 @@ export const icons = {
   clock: base(`<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>`),
   export: base(`<path d="M12 15V4m0 0L8.5 7.5M12 4l3.5 3.5"/><path d="M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/>`),
   today: base(`<circle cx="12" cy="12" r="4"/><path d="M12 3v1.6M12 19.4V21M3 12h1.6M19.4 12H21M5.9 5.9l1.2 1.2M16.9 16.9l1.2 1.2M18.1 5.9l-1.2 1.2M7.1 16.9l-1.2 1.2" opacity=".85"/>`),
+  shield: base(`<path d="M12 3.2 5 5.8v5.4c0 4.4 2.9 7.6 7 9.6 4.1-2 7-5.2 7-9.6V5.8L12 3.2Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>`),
+  chevronDown: base(`<path d="m5.5 9 6.5 6.5L18.5 9"/>`),
 };
 
 export const icon = (name, cls = '') =>

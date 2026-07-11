@@ -10,10 +10,12 @@ import { bedtimePlan, napSuggestions, busyBlocks } from './planner.js';
 import { demoStoreRows } from './demo.js';
 import {
   sessionsToRows, mergeImport, nightsFromRows, applyEdit, makeManualRow,
+  reconcileTimer,
 } from './store.js';
 import { initApi, DEFAULT_SETTINGS } from './api.js';
 import * as cal from './calendar.js';
 import * as ui from './ui/views.js';
+import { loadMotion, attachPressFeedback, dismissSplash as animatedSplashOut } from './ui/anim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,6 +23,7 @@ const GUEST_KEY = 'guestMode.v1';
 const CAL_LINKED_KEY = 'calendarLinked.v1';
 const TIMER_KEY = 'activeTimer.v1';
 const TREND_DETAIL_KEY = 'trendDetail.v1';
+const ONBOARDED_KEY = 'onboarded.v1';
 
 const state = {
   api: null,
@@ -33,6 +36,8 @@ const state = {
   view: 'today',
   trendRange: 14,
   trendDetail: 'clean',
+  trendRowsExpanded: false,
+  logCount: 4,
   editing: null, // { rowId } | { dateKey } | null
   timer: null, // { startedAt: ISO, kind } while a live sleep/nap is running
   timerPending: false, // the confirm sheet for a finished timer is open
@@ -118,10 +123,10 @@ function render() {
     ui.renderToday(vm);
   } else if (state.view === 'sleep') {
     $('view-subtitle').textContent = '';
-    ui.renderSleepLog(vm);
+    ui.renderSleepLog(vm, state.logCount);
   } else if (state.view === 'trends') {
     $('view-subtitle').textContent = '';
-    ui.renderTrends(vm, state.trendRange, state.trendDetail);
+    ui.renderTrends(vm, state.trendRange, state.trendDetail, state.trendRowsExpanded);
   } else if (state.view === 'settings') {
     $('view-subtitle').textContent = '';
     ui.renderSettings(state, vm);
@@ -216,6 +221,7 @@ async function refreshCalendar({ interactive = false } = {}) {
 
 async function enterApp() {
   ui.showApp();
+  adoptTimer();
   await handleFragment({ announce: true });
   if (state.pendingImport && canWrite()) {
     await importRows(state.pendingImport);
@@ -263,7 +269,9 @@ async function onSignedIn(user) {
 async function boot() {
   ui.injectIcons();
   bindEvents();
-  state.timer = readTimer();
+  loadMotion(); // fire-and-forget: springs upgrade in when the CDN answers
+  attachPressFeedback(document);
+  state.timer = readLocalTimer();
   state.trendDetail = safeGet(TREND_DETAIL_KEY) === 'advanced' ? 'advanced' : 'clean';
   state.api = await initApi();
   state.settings = await state.api.settings.load();
@@ -278,8 +286,21 @@ async function boot() {
   }
 
   await reloadRows();
-  ui.showSplash(false);
+  animatedSplashOut(document.getElementById('splash'));
 
+  // Brand-new visitor with nothing loaded: explain the app first.
+  const peek = parseFragment(location.hash.slice(1));
+  const isFresh = !safeGet(ONBOARDED_KEY) && !state.user
+    && !peek.demo && peek.samples.length === 0
+    && state.rows.filter((r) => !r.deleted).length === 0;
+  if (isFresh) {
+    ui.showOnboarding({ canLogin: state.api.mode === 'supabase' });
+    return;
+  }
+  await routeAfterOnboarding();
+}
+
+async function routeAfterOnboarding() {
   if (state.api.mode === 'supabase' && !state.user && !state.guest) {
     // Peek at the fragment so a check-in link isn't lost behind the gate.
     const parsed = parseFragment(location.hash.slice(1));
@@ -292,6 +313,12 @@ async function boot() {
     return;
   }
   await enterApp();
+}
+
+function finishOnboarding() {
+  safeSet(ONBOARDED_KEY, '1');
+  ui.hideOnboarding();
+  routeAfterOnboarding();
 }
 
 // --------------------------------------------------------------- events
@@ -316,6 +343,10 @@ function bindEvents() {
     else if (a === 'timer-start') startTimer(el.dataset.kind);
     else if (a === 'timer-finish') finishTimer();
     else if (a === 'timer-discard') discardTimer();
+    else if (a === 'log-more') { state.logCount = 14; render(); }
+    else if (a === 'log-less') { state.logCount = 4; render(); window.scrollTo({ top: 0 }); }
+    else if (a === 'trend-rows-more') { state.trendRowsExpanded = true; render(); }
+    else if (a === 'trend-rows-less') { state.trendRowsExpanded = false; render(); }
     else if (a === 'sign-out') state.api.auth.signOut();
     else if (a === 'go-auth') { safeDel(GUEST_KEY); state.guest = false; location.reload(); }
     else if (a === 'cal-link') linkCalendar();
@@ -492,8 +523,18 @@ function bindEvents() {
     if (e.target === $('editor')) ui.closeEditor();
   });
 
+  // onboarding
+  $('ob-next').addEventListener('click', () => {
+    if (ui.obAdvance()) finishOnboarding();
+  });
+  $('ob-skip').addEventListener('click', finishOnboarding);
+
   window.addEventListener('hashchange', async () => {
     if (location.hash.replace('#', '') === '') return;
+    if (!document.getElementById('onboarding').hidden) {
+      safeSet(ONBOARDED_KEY, '1');
+      ui.hideOnboarding();
+    }
     await handleFragment({ announce: true });
     render();
   });
@@ -574,21 +615,46 @@ async function deleteEditor() {
 
 // ---------------------------------------------------------- live logging
 
-function readTimer() {
+function readLocalTimer() {
   try {
     const t = JSON.parse(safeGet(TIMER_KEY));
-    if (t?.startedAt && ['sleep', 'nap'].includes(t.kind)) {
-      // A forgotten timer older than 24h is stale, not a sleep record.
-      if (Date.now() - new Date(t.startedAt).getTime() < 24 * 3600e3) return t;
-    }
+    if (t?.startedAt && ['sleep', 'nap'].includes(t.kind)) return t;
   } catch { /* ignore */ }
   return null;
 }
 
+// Persist the timer locally (offline cache) AND to the account when signed
+// in, so a timer started on the phone can be finished on any device.
+function writeTimer(timer) {
+  state.timer = timer;
+  if (timer) safeSet(TIMER_KEY, JSON.stringify(timer));
+  else safeDel(TIMER_KEY);
+  if (state.api?.mode === 'supabase' && state.user) {
+    state.api.settings
+      .save({ timerStartedAt: timer?.startedAt ?? null, timerKind: timer?.kind ?? null })
+      .then((s) => { state.settings = s; })
+      .catch(() => { /* offline — the local cache still carries it */ });
+  }
+}
+
+// On entry (boot or sign-in), merge this device's cached timer with the
+// account's copy. The server wins; a fresh local-only timer is pushed up.
+function adoptTimer() {
+  const serverTimer = state.settings.timerStartedAt
+    ? { startedAt: state.settings.timerStartedAt, kind: state.settings.timerKind ?? 'sleep' }
+    : null;
+  const { timer, pushToServer, clearServer } = reconcileTimer(readLocalTimer(), serverTimer);
+  state.timer = timer;
+  if (timer) safeSet(TIMER_KEY, JSON.stringify(timer));
+  else safeDel(TIMER_KEY);
+  if ((pushToServer || clearServer) && state.api?.mode === 'supabase' && state.user) {
+    writeTimer(timer);
+  }
+}
+
 function startTimer(kind) {
   if (isDemo()) { ui.toast('Exit the demo first', 'warn'); return; }
-  state.timer = { startedAt: new Date().toISOString(), kind: kind === 'nap' ? 'nap' : 'sleep' };
-  safeSet(TIMER_KEY, JSON.stringify(state.timer));
+  writeTimer({ startedAt: new Date().toISOString(), kind: kind === 'nap' ? 'nap' : 'sleep' });
   ui.toast(kind === 'nap' ? 'Nap timer running — tap "I\'m awake" after' : 'Sleep timer running — see you in the morning');
   render();
 }
@@ -618,18 +684,16 @@ function finishTimer() {
 }
 
 function discardTimer() {
-  state.timer = null;
   state.timerPending = false;
-  safeDel(TIMER_KEY);
+  writeTimer(null);
   ui.toast('Timer discarded');
   render();
 }
 
 function clearTimerAfterSave() {
   if (!state.timerPending) return;
-  state.timer = null;
   state.timerPending = false;
-  safeDel(TIMER_KEY);
+  writeTimer(null);
 }
 
 // Keep the elapsed readout fresh while a timer runs.

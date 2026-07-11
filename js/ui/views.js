@@ -2,7 +2,9 @@
 // data-action attributes; main.js owns state and dispatches the actions.
 
 import { icons, icon } from './icons.js';
-import { countUp, drawIn, sweepGauge, replayEntrance } from './anim.js';
+import {
+  countUp, drawIn, sweepGauge, replayEntrance, revealCards, motionReady,
+} from './anim.js';
 import {
   gaugeSVG, energyCurveSVG, durationBarsSVG, debtTrendSVG, sleepTimesSVG,
   dayMapSVG, stagebarHTML, attachChartTooltips, fmtDur, fmtClock,
@@ -56,7 +58,8 @@ export function switchView(view, subtitle = '') {
   active.classList.remove('view-enter');
   void active.offsetWidth;
   active.classList.add('view-enter');
-  replayEntrance(active);
+  if (!revealCards(active)) replayEntrance(active);
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 export function setTopbar(view, vm, state) {
@@ -308,7 +311,7 @@ function renderLastNight(vm) {
 
 // ---------------------------------------------------------------- sleep
 
-export function renderSleepLog(vm) {
+export function renderSleepLog(vm, visibleCount = 4) {
   const nights = vm.nights14;
   const withData = nights.filter((n) => n.hasData);
   const avg = withData.length
@@ -319,7 +322,15 @@ export function renderSleepLog(vm) {
     ${withData.length ? `<span class="chip">avg ${fmtDur(avg)}</span>` : ''}
     ${vm.isDemo ? '<span class="chip dim">demo — read-only</span>' : ''}`;
 
-  $('log-list').innerHTML = nights.map((night) => {
+  const shown = nights.slice(0, visibleCount);
+  const hidden = nights.length - shown.length;
+  const moreBtn = hidden > 0
+    ? `<button class="btn show-more" data-action="log-more">${icons.chevronDown} Show ${hidden} more night${hidden === 1 ? '' : 's'}</button>`
+    : nights.length > 4
+      ? `<button class="btn show-more" data-action="log-less">Show fewer</button>`
+      : '';
+
+  $('log-list').innerHTML = shown.map((night) => {
     const day = night.date.toLocaleDateString([], { weekday: 'short' });
     const date = night.date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     const isToday = night === nights[0];
@@ -356,12 +367,54 @@ export function renderSleepLog(vm) {
           <div class="log-pills">${pills}</div>
         </div>
       </article>`;
-  }).join('');
+  }).join('') + moreBtn;
 }
 
 // --------------------------------------------------------------- trends
 
-export function renderTrends(vm, rangeDays, detail = 'clean') {
+// RISE-style "every night" list: exact bed/wake times and that morning's
+// debt reading, tappable into the editor. Detailed mode only.
+function renderTrendData(vm, nights, series, advanced, rowsExpanded) {
+  const card = $('trend-data-card');
+  const withData = nights
+    .map((n, i) => ({ n, debt: series[i] }))
+    .filter(({ n }) => n.hasData);
+  if (!advanced || withData.length === 0) { card.hidden = true; return; }
+  card.hidden = false;
+
+  const limit = rowsExpanded ? withData.length : Math.min(7, withData.length);
+  const rows = withData.slice(0, limit).map(({ n, debt }) => {
+    const main = n.mainSession ?? n.naps[0];
+    const isToday = n === vm.nightsLong[0];
+    const label = isToday
+      ? 'Last night'
+      : n.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const times = main
+      ? `${fmtClock(new Date(main.start))} – ${fmtClock(new Date(main.end))}`
+      : '—';
+    const napNote = n.naps.length && n.mainSession
+      ? ` <span class="nl-nap">+${fmtDur(n.naps.reduce((t, s) => t + s.asleepMin, 0))} nap</span>`
+      : '';
+    const inner = `
+      <span class="nl-when"><strong>${label}</strong><span class="sub">${times}${napNote}</span></span>
+      <span class="nl-nums">
+        <span class="nl-slept">${fmtDur(n.totalMin)}</span>
+        <span class="nl-debt ${debt <= 300 ? 'good-text' : 'error'}">${(debt / 60).toFixed(1)}h debt</span>
+      </span>`;
+    return vm.isDemo || !main?.id
+      ? `<div class="night-row">${inner}</div>`
+      : `<button class="night-row" data-action="edit-session" data-id="${esc(main.id)}">${inner}${icons.chevronRight}</button>`;
+  }).join('');
+
+  const more = withData.length > limit
+    ? `<button class="btn show-more" data-action="trend-rows-more">${icons.chevronDown} Show all ${withData.length} nights</button>`
+    : rowsExpanded && withData.length > 7
+      ? `<button class="btn show-more" data-action="trend-rows-less">Show fewer</button>`
+      : '';
+  $('trend-data').innerHTML = rows + more;
+}
+
+export function renderTrends(vm, rangeDays, detail = 'clean', rowsExpanded = false) {
   for (const b of document.querySelectorAll('#trend-range button')) {
     b.classList.toggle('active', Number(b.dataset.range) === rangeDays);
   }
@@ -398,6 +451,8 @@ export function renderTrends(vm, rangeDays, detail = 'clean') {
   $('trend-times').innerHTML = sleepTimesSVG(nights, { detail: advanced });
   attachChartTooltips($('trend-times'));
   $('consistency-chip').textContent = vm.consistency ? `${vm.consistency.score} / 100` : 'needs more nights';
+
+  renderTrendData(vm, nights, series, advanced, rowsExpanded);
 }
 
 // ------------------------------------------------------------- settings
@@ -568,6 +623,47 @@ export function editorError(msg) {
 
 export function closeEditor() {
   $('editor').close();
+}
+
+// ---------------------------------------------------------- onboarding
+
+export function showOnboarding({ canLogin }) {
+  const ob = $('onboarding');
+  ob.hidden = false;
+  $('auth').hidden = true;
+  $('app').hidden = true;
+  $('ob-skip').textContent = canLogin ? 'Log in' : 'Skip';
+
+  const track = $('ob-track');
+  const slides = [...track.children];
+  const dots = $('ob-dots');
+  dots.innerHTML = slides.map((_, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('');
+
+  const syncDots = () => {
+    const idx = obIndex();
+    [...dots.children].forEach((d, i) => d.classList.toggle('on', i === idx));
+    $('ob-next').textContent = idx === slides.length - 1 ? "Let's get started" : 'Next';
+  };
+  track.addEventListener('scroll', () => requestAnimationFrame(syncDots), { passive: true });
+  syncDots();
+}
+
+export function obIndex() {
+  const track = $('ob-track');
+  return Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+}
+
+export function obAdvance() {
+  const track = $('ob-track');
+  const slides = track.children.length;
+  const idx = obIndex();
+  if (idx >= slides - 1) return true; // finished
+  track.scrollTo({ left: (idx + 1) * track.clientWidth, behavior: 'smooth' });
+  return false;
+}
+
+export function hideOnboarding() {
+  $('onboarding').hidden = true;
 }
 
 // ------------------------------------------------------------- auth ui
