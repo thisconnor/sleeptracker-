@@ -472,22 +472,34 @@ input[type="datetime-local"], input[type="time"] {
 .stepper-mini span { font-variant-numeric: tabular-nums; }
 .mini-check { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink-dim); }
 
+/* ----------------------------------------------------------- open block */
+
+/* Card-free sections for the home page: content floats directly on the
+   night sky, with only spacing and a label giving it structure. */
+.open-block {
+  position: relative;
+  padding: 8px 8px 2px;
+}
+
+.open-block + .open-block { margin-top: 2px; }
+
+.open-block .card-label { margin-bottom: 10px; }
+
 /* ----------------------------------------------------------------- hero */
 
 .hero { text-align: center; }
 .hero .card-label { text-align: left; }
 
-/* The debt number owns the card: a colored aura behind the gauge and a
-   gradient-filled numeral, both keyed to the zone and loudest at the
-   extremes. */
-#debt-hero { overflow: hidden; }
+/* The debt number owns its section: a colored aura floating behind the
+   gauge and a gradient-filled numeral, both keyed to the zone and loudest
+   at the extremes. */
 
 .debt-aura {
   position: absolute;
   left: 50%;
   top: 54%;
-  width: 340px;
-  height: 340px;
+  width: 420px;
+  height: 420px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
@@ -543,7 +555,7 @@ input[type="datetime-local"], input[type="time"] {
   font-weight: 600;
 }
 
-.gauge-wrap { position: relative; max-width: 280px; margin: 4px auto 0; }
+.gauge-wrap { position: relative; max-width: 300px; margin: 4px auto 0; }
 
 .gauge-center {
   position: absolute;

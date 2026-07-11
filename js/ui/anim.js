@@ -40,7 +40,7 @@ export function revealCards(container) {
   const m = motionMod;
   if (!m || reducedMotion()) return false;
   let eager = 0;
-  for (const el of container.querySelectorAll('.card')) {
+  for (const el of container.querySelectorAll('.card, .open-block')) {
     el.classList.remove('card-enter');
     el.style.opacity = '0';
     m.inView(el, () => {
@@ -149,7 +149,7 @@ export function sweepGauge(path, pct, duration = 800) {
 // unavailable).
 export function replayEntrance(container) {
   if (!container || reducedMotion()) return;
-  for (const el of container.querySelectorAll('.card')) {
+  for (const el of container.querySelectorAll('.card, .open-block')) {
     el.style.opacity = '';
     el.classList.remove('card-enter');
     void el.offsetWidth;
