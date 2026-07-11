@@ -20,6 +20,55 @@
 
   <div id="splash"><div class="splash-moon"></div></div>
 
+  <!-- ====================================================== onboarding -->
+  <section id="onboarding" class="ob" hidden>
+    <header class="ob-top">
+      <div class="ob-brand">
+        <svg viewBox="0 0 64 64" width="26" height="26" fill="none" aria-hidden="true">
+          <path d="M40 16a18 18 0 1 0 8 24 15 15 0 0 1-8-24Z" stroke="url(#brandGrad2)" stroke-width="3" stroke-linejoin="round"/>
+          <defs><linearGradient id="brandGrad2" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#8B9DFF"/><stop offset="1" stop-color="#FFB385"/>
+          </linearGradient></defs>
+        </svg>
+        <span>Sleep Check-in</span>
+      </div>
+      <button class="btn small" id="ob-skip">Log in</button>
+    </header>
+
+    <div class="ob-track" id="ob-track">
+      <article class="ob-slide">
+        <div class="ob-art" data-icon="moon"></div>
+        <h2>Your sleep, decoded</h2>
+        <p>One glance every morning: how much sleep you owe your body, how today's energy will flow, and exactly what to do about tonight.</p>
+      </article>
+      <article class="ob-slide">
+        <div class="ob-art" data-icon="wave"></div>
+        <h2>Sleep debt, not sleep scores</h2>
+        <p>Your last 14 nights are weighed — recent ones count most — into a single number. Keep it under five hours and your days feel like yours. Naps pay it down; sleeping in offsets it.</p>
+      </article>
+      <article class="ob-slide">
+        <div class="ob-art" data-icon="coffee"></div>
+        <h2>A plan for tonight, every morning</h2>
+        <p>You get a recommended bedtime that gently repays debt, your last-caffeine time, and an energy schedule with the best window for a nap — tuned to your calendar if you link one.</p>
+      </article>
+      <article class="ob-slide">
+        <div class="ob-art" data-icon="pencil"></div>
+        <h2>Track it your way</h2>
+        <p>Sync Apple Health with one tap of an iPhone Shortcut, or use the live timer: tap when you lie down, tap when you wake, confirm, done. Every night is editable — add naps, fix times.</p>
+      </article>
+      <article class="ob-slide">
+        <div class="ob-art" data-icon="shield"></div>
+        <h2>Private by design</h2>
+        <p>Your sleep data belongs to your account alone, check-in links keep it out of reach of any server, and calendar access never leaves your browser. No ads, no tracking, no subscription.</p>
+      </article>
+    </div>
+
+    <div class="ob-dots" id="ob-dots" aria-hidden="true"></div>
+    <div class="ob-actions">
+      <button class="btn primary" id="ob-next">Next</button>
+    </div>
+  </section>
+
   <!-- ======================================================= auth gate -->
   <section id="auth" class="auth" hidden>
     <div class="auth-inner">
@@ -191,6 +240,10 @@
         </div>
         <div id="trend-times" class="chart chart-tips"></div>
         <p class="sub center">Each capsule is one night, bed to wake — a tighter column means a steadier body clock. <i class="dot dot-b"></i>naps</p>
+      </article>
+      <article class="card" id="trend-data-card" hidden>
+        <p class="card-label">Every night</p>
+        <div id="trend-data" class="night-list"></div>
       </article>
     </section>
 

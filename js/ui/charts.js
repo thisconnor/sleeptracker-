@@ -328,9 +328,10 @@ function peakMarker(chronoSeries, cx, y) {
 // Each night as a vertical capsule from bedtime to wake on an 8 PM -> noon
 // axis; naps as dots. The tightness of the band IS the consistency story.
 export function sleepTimesSVG(nights, { height = 190, detail = false } = {}) {
-  const H = height;
+  const showDurations = detail && nights.length <= 16;
+  const H = height + (showDurations ? 14 : 0);
   const top = 14;
-  const bottom = H - 30;
+  const bottom = height - 30;
   const x0 = 34;
   const x1 = 416;
   const n = nights.length;
@@ -384,12 +385,26 @@ export function sleepTimesSVG(nights, { height = 190, detail = false } = {}) {
         stroke-dasharray="2 3" opacity="0.7"/>`
     : '';
 
+  // At two-week width, a duration fits under every capsule — staggered on
+  // two baseline rows so neighbors can't collide.
+  let durations = '';
+  if (showDurations) {
+    for (let i = 0; i < n; i++) {
+      const night = chrono[i];
+      if (!night.hasData) continue;
+      const y = i % 2 === 0 ? H - 18 : H - 7;
+      durations += `<text x="${cx(i).toFixed(1)}" y="${y}" text-anchor="middle" font-size="8"
+        fill="rgba(255,255,255,${i === n - 1 ? 0.8 : 0.45})">${fmtDur(night.totalMin)}</text>`;
+    }
+  }
+
   return `
     <svg viewBox="0 0 ${CHART_W} ${H}" role="img" aria-label="Sleep timing by night">
       ${underlay}
       ${guides}
       ${drift}
       ${marks}
+      ${durations}
     </svg>`;
 }
 

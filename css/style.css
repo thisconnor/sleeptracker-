@@ -811,6 +811,173 @@ button.pill:active { transform: scale(0.97); }
 
 .tab.active .tab-icon { color: var(--glow); }
 
+/* ------------------------------------------------------------ onboarding */
+
+.ob {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top)) 0 calc(24px + env(safe-area-inset-bottom));
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.ob-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.ob-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink-dim);
+}
+
+.ob-track {
+  flex: 1;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ob-track::-webkit-scrollbar { display: none; }
+
+.ob-slide {
+  min-width: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 34px;
+  gap: 6px;
+}
+
+.ob-art {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 32px;
+  margin-bottom: 18px;
+  font-size: 44px;
+  color: var(--accent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    linear-gradient(135deg, rgba(139, 157, 255, 0.18), rgba(255, 179, 133, 0.14));
+  border: 1px solid var(--stroke);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.ob-art svg { width: 44px; height: 44px; }
+.ob-slide:nth-child(odd) .ob-art { color: var(--glow); }
+
+.ob-slide h2 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.ob-slide p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-dim);
+  max-width: 340px;
+}
+
+.ob-dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 0 16px;
+}
+
+.ob-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.ob-dots i.on {
+  background: var(--glow);
+  transform: scale(1.25);
+  box-shadow: 0 0 8px rgba(255, 179, 133, 0.6);
+}
+
+.ob-actions { padding: 0 24px; }
+.ob-actions .btn { width: 100%; padding: 15px; font-size: 16px; }
+
+/* ------------------------------------------------------------ night list */
+
+.night-list { display: flex; flex-direction: column; }
+
+.night-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 2px;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+button.night-row { cursor: pointer; }
+button.night-row:last-of-type, .night-row:last-of-type { border-bottom: none; }
+.night-row > svg, .night-row .icon { color: var(--ink-faint); flex-shrink: 0; }
+
+.nl-when { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.nl-when strong { font-size: 14.5px; font-weight: 600; }
+.nl-when .sub { margin: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.nl-nap { color: rgba(217, 111, 48, 0.95); }
+
+.nl-nums {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nl-slept { font-size: 15px; font-weight: 500; }
+.nl-debt { font-size: 12px; }
+
+/* ------------------------------------------------------------- show more */
+
+.show-more {
+  align-self: center;
+  margin-top: 6px;
+  color: var(--ink-dim);
+  font-size: 13.5px;
+}
+
+.show-more svg { width: 14px; height: 14px; }
+
+/* Motion drives press feedback when available; disable the CSS fallback so
+   inline transforms don't fight the :active rule. */
+html.motion-on .btn:active,
+html.motion-on .step-btn:active,
+html.motion-on .icon-btn:active,
+html.motion-on button.pill:active { transform: none; }
+
 /* ------------------------------------------------------------------ auth */
 
 .auth {
