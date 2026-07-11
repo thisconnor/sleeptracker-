@@ -15,8 +15,11 @@ import {
 import { initApi, DEFAULT_SETTINGS } from './api.js';
 import * as cal from './calendar.js';
 import { pickGreeting } from './greeting.js';
+import { normalizeHandle, buildBoard, demoBoard } from './social.js';
+import { goodZoneStreaks, celebrationFor } from './streaks.js';
 import * as ui from './ui/views.js';
-import { loadMotion, attachPressFeedback, dismissSplash as animatedSplashOut } from './ui/anim.js';
+import { loadMotion, attachPressFeedback, dismissSplash as animatedSplashOut, celebrate } from './ui/anim.js';
+import { dateKey } from './sessions.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -25,6 +28,8 @@ const CAL_LINKED_KEY = 'calendarLinked.v1';
 const TIMER_KEY = 'activeTimer.v1';
 const TREND_DETAIL_KEY = 'trendDetail.v1';
 const ONBOARDED_KEY = 'onboarded.v1';
+const CELEBRATED_KEY = 'celebrated.v1';
+const STATS_PUSH_KEY = 'statsPushedAt.v1';
 
 const state = {
   api: null,
@@ -44,6 +49,7 @@ const state = {
   timerPending: false, // the confirm sheet for a finished timer is open
   calendar: { linked: false, todayEvents: [], tomorrowFirstEvent: null, error: null },
   calendarConfigured: cal.calendarConfigured(),
+  social: { supported: false, user: null, profile: null, connections: null, board: [], demoBoard: [] },
   pendingImport: null, // rows parsed from the hash while signed out
   baseUrl: location.protocol === 'file:'
     ? 'https://thisconnor.github.io/sleeptracker-/'
@@ -89,8 +95,10 @@ function compute() {
   const freshness = live.length
     ? live.reduce((m, r) => (r.end > m ? r.end : m), live[0].end)
     : null;
+  const streaks = goodZoneStreaks(nightsLong, seriesLong);
   return {
     now,
+    streaks,
     nights14,
     nightsLong,
     needMin,
@@ -134,6 +142,10 @@ function render() {
     }));
     ui.renderLogNow(vm, state.timer);
     ui.renderToday(vm);
+    syncSocialState(vm);
+    ui.renderFriends(vm, state.social);
+    maybeCelebrate(vm);
+    pushStatsThrottled(vm);
   } else if (state.view === 'sleep') {
     $('view-subtitle').textContent = '';
     ui.renderSleepLog(vm, state.logCount);
@@ -143,7 +155,109 @@ function render() {
   } else if (state.view === 'settings') {
     $('view-subtitle').textContent = '';
     ui.renderSettings(state, vm);
+    ui.renderSocialSettings(state.social);
   }
+}
+
+// ---------------------------------------------------------------- social
+
+function syncSocialState(vm) {
+  state.social.supported = state.api.social?.supported ?? false;
+  state.social.user = state.user;
+  state.social.demoBoard = demoBoard(vm.debtMin);
+  if (state.social.supported && state.user && state.social.connections) {
+    state.social.board = buildBoard({
+      me: {
+        name: state.settings.displayName || 'You',
+        handle: state.social.profile?.handle,
+        debtMin: vm.debtMin,
+        energy: vm.energy,
+      },
+      friends: state.social.connections.friends,
+      now: vm.now,
+    });
+  }
+}
+
+async function loadSocial() {
+  if (!state.api.social?.supported || !state.user) return;
+  try {
+    state.social.profile = await state.api.social.profile();
+    state.social.connections = await state.api.social.connections();
+  } catch (err) {
+    console.error('social load failed:', err);
+  }
+}
+
+// Share the headline numbers with friends at most every 30 minutes.
+function pushStatsThrottled(vm) {
+  if (!state.api.social?.supported || !state.user || !state.social.profile?.handle || isDemo()) return;
+  const last = Number(safeGet(STATS_PUSH_KEY) ?? 0);
+  if (Date.now() - last < 30 * 60000) return;
+  safeSet(STATS_PUSH_KEY, String(Date.now()));
+  state.api.social.pushStats({ debtMin: vm.debtMin, energy: vm.energy }).catch(() => {});
+}
+
+async function saveHandle() {
+  const input = $('handle-input');
+  const handle = normalizeHandle(input?.value);
+  if (!handle) {
+    ui.handleError('3–20 characters: letters, numbers, underscores.');
+    return;
+  }
+  try {
+    await state.api.social.setHandle(handle, state.settings.displayName ?? null);
+    state.social.profile = { handle, displayName: state.settings.displayName ?? null };
+    ui.toast(`You're @${handle}`);
+    render();
+  } catch (err) {
+    ui.handleError(err.message);
+  }
+}
+
+async function friendSearch() {
+  const raw = $('friend-search')?.value;
+  const handle = normalizeHandle(raw);
+  if (!handle) { ui.friendSearchResult(null, '3–20 characters: letters, numbers, underscores.'); return; }
+  if (handle === state.social.profile?.handle) { ui.friendSearchResult(null, 'That would be you.'); return; }
+  try {
+    const result = await state.api.social.search(handle);
+    ui.friendSearchResult(result, null);
+  } catch (err) {
+    ui.friendSearchResult(null, err.message);
+  }
+}
+
+async function friendAction(kind, id) {
+  try {
+    if (kind === 'request') await state.api.social.request(id);
+    else if (kind === 'accept') await state.api.social.accept(id);
+    else if (kind === 'remove') await state.api.social.remove(id);
+    state.social.connections = await state.api.social.connections();
+    ui.toast(kind === 'request' ? 'Request sent' : kind === 'accept' ? 'Friend added' : 'Removed');
+    render();
+  } catch (err) {
+    ui.toast(err.message, 'warn');
+  }
+}
+
+// ----------------------------------------------------------- celebrations
+
+function maybeCelebrate(vm) {
+  if (isDemo()) return;
+  const event = celebrationFor({
+    debtMin: vm.debtMin,
+    streaks: vm.streaks,
+    hasAnyData: vm.nights14.some((n) => n.hasData),
+  });
+  if (!event) return;
+  const stamp = `${dateKey(vm.now)}:${event.id}`;
+  if (safeGet(CELEBRATED_KEY) === stamp) return;
+  safeSet(CELEBRATED_KEY, stamp);
+  setTimeout(() => {
+    celebrate($('debt-hero'));
+    ui.toast(event.message);
+  }, 650);
 }
 
 function switchView(view) {
@@ -235,6 +349,7 @@ async function refreshCalendar({ interactive = false } = {}) {
 async function enterApp() {
   ui.showApp();
   adoptTimer();
+  await loadSocial();
   await handleFragment({ announce: true });
   if (state.pendingImport && canWrite()) {
     await importRows(state.pendingImport);
@@ -360,6 +475,12 @@ function bindEvents() {
     else if (a === 'log-less') { state.logCount = 4; render(); window.scrollTo({ top: 0 }); }
     else if (a === 'trend-rows-more') { state.trendRowsExpanded = true; render(); }
     else if (a === 'trend-rows-less') { state.trendRowsExpanded = false; render(); }
+    else if (a === 'goto-settings') switchView('settings');
+    else if (a === 'save-handle') saveHandle();
+    else if (a === 'friend-search') friendSearch();
+    else if (a === 'friend-request') friendAction('request', el.dataset.id);
+    else if (a === 'friend-accept') friendAction('accept', el.dataset.id);
+    else if (a === 'friend-remove') friendAction('remove', el.dataset.id);
     else if (a === 'sign-out') state.api.auth.signOut();
     else if (a === 'go-auth') { safeDel(GUEST_KEY); state.guest = false; location.reload(); }
     else if (a === 'cal-link') linkCalendar();

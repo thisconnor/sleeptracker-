@@ -78,6 +78,41 @@ export function attachPressFeedback(root = document) {
   root.addEventListener('pointercancel', release);
 }
 
+// A brief shooting-star burst from the center of an element — used for
+// zero-debt days and streak milestones. Waits for Motion if it's still
+// loading; no-op with reduced motion or if the library is unavailable.
+export async function celebrate(originEl) {
+  const m = motionMod ?? await loadMotion();
+  if (!m || !originEl || reducedMotion()) return;
+  const rect = originEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + Math.min(rect.height / 2, 220);
+  const layer = document.createElement('div');
+  layer.className = 'celebration';
+  document.body.appendChild(layer);
+  const N = 16;
+  for (let i = 0; i < N; i++) {
+    const s = document.createElement('span');
+    s.className = `spark ${i % 3 === 0 ? 'spark-glow' : 'spark-accent'}`;
+    s.textContent = i % 4 === 0 ? '✦' : '•';
+    s.style.left = `${cx}px`;
+    s.style.top = `${cy}px`;
+    layer.appendChild(s);
+    const angle = (i / N) * Math.PI * 2 + (i % 2) * 0.3;
+    const dist = 90 + (i % 5) * 28;
+    try {
+      m.animate(s, {
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist - 30,
+        opacity: [1, 1, 0],
+        scale: [1, 0.5],
+        rotate: (i % 2 ? 1 : -1) * 120,
+      }, { duration: 1.05 + (i % 4) * 0.12, ease: 'easeOut' });
+    } catch { /* ignore */ }
+  }
+  setTimeout(() => layer.remove(), 1600);
+}
+
 // Fade the splash out instead of blinking it away.
 export function dismissSplash(el) {
   if (!el) return;
