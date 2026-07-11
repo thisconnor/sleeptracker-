@@ -48,6 +48,15 @@ Repo **Settings → Pages → Source: Deploy from a branch → `main` / (root)**
 
 **Free-tier note**: Supabase pauses free projects after ~7 days with zero traffic. Daily check-ins keep it awake; if it ever pauses, un-pause it from the dashboard in one click.
 
+### 2b. Sign in with Google (optional, ~3 minutes)
+
+The login screen has a "Continue with Google" button. To activate it:
+
+1. In [Google Cloud Console](https://console.cloud.google.com) → **APIs & Services → Credentials** → open your OAuth client → **Authorized redirect URIs** → add `https://ixpghtttwprullumnxmv.supabase.co/auth/v1/callback` → Save.
+2. In Supabase → **Authentication → Sign In / Providers → Google** → Enable → paste the **Client ID** and the **Client Secret** from that same Google credentials page → Save. (The secret lives only in Supabase's dashboard — never in this repo.)
+
+While your OAuth consent screen is in *Testing* mode, Google sign-in works for the test users you've listed, which is exactly the same list as the calendar link.
+
 ### 3. The calendar link (optional, ~5 minutes)
 
 Only needed if you want day-aware nap windows and bedtime (your first event anchors the day; tomorrow's first event pulls your wake target earlier when needed).

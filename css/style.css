@@ -1229,6 +1229,7 @@ html.motion-on button.pill:active { transform: none; }
 
 .auth-card { width: 100%; }
 .auth-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.auth-google { width: 100%; margin-top: 10px; }
 .auth-alt { display: flex; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; }
 
 /* ---------------------------------------------------------------- sheet */
