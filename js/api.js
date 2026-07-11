@@ -19,6 +19,9 @@ export const DEFAULT_SETTINGS = {
   wakeTargetMin: null,
   prepBufferMin: 60,
   debtMode: 'weighted',
+  sleepOnsetMarginMin: 15,
+  repayMode: 'auto',
+  repayFixedMin: 30,
 };
 
 function safeGet(key) {
@@ -120,6 +123,9 @@ const settingsFromDb = (d) => ({
   wakeTargetMin: d.wake_target_min,
   prepBufferMin: d.prep_buffer_min,
   debtMode: d.debt_mode,
+  sleepOnsetMarginMin: d.sleep_onset_margin_min,
+  repayMode: d.repay_mode,
+  repayFixedMin: d.repay_fixed_min,
 });
 
 const settingsToDb = (s) => {
@@ -130,6 +136,9 @@ const settingsToDb = (s) => {
   if ('wakeTargetMin' in s) out.wake_target_min = s.wakeTargetMin;
   if ('prepBufferMin' in s) out.prep_buffer_min = s.prepBufferMin;
   if ('debtMode' in s) out.debt_mode = s.debtMode;
+  if ('sleepOnsetMarginMin' in s) out.sleep_onset_margin_min = s.sleepOnsetMarginMin;
+  if ('repayMode' in s) out.repay_mode = s.repayMode;
+  if ('repayFixedMin' in s) out.repay_fixed_min = s.repayFixedMin;
   return out;
 };
 

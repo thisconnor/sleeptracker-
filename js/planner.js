@@ -7,13 +7,33 @@ import { minuteOfDay } from './sessions.js';
 const MS_PER_MIN = 60000;
 const MS_PER_HOUR = 3600000;
 
-// Debt repayment pacing: aim to repay ~1/5 of the current debt tonight,
-// in 15-minute steps, capped at +60 min — extending sleep beyond an hour a
-// night mostly buys shallow, fragmented sleep.
-export function repaymentExtraMin(debtMin) {
+// Debt repayment sizing.
+//   auto  — repay ~1/5 of the current debt tonight, in 15-minute steps,
+//           capped at +60 min (beyond an hour mostly buys shallow sleep).
+//           With a calendar-derived free evening (windowMin = minutes of
+//           extra sleep the evening actually fits beyond the need), the fit
+//           can raise that up to +90 min — never past the remaining debt.
+//   fixed — the user's recurring nightly amount, still clamped to the
+//           remaining debt (no point "repaying" into oversleep).
+export function repaymentExtraMin(debtMin, { mode = 'auto', fixedMin = 30, windowMin = null } = {}) {
   if (debtMin <= 0) return 0;
-  const raw = debtMin / 5;
-  return Math.max(0, Math.min(60, Math.round(raw / 15) * 15));
+  const debtCap = Math.round(debtMin);
+  if (mode === 'fixed') {
+    return Math.max(0, Math.min(Math.round(fixedMin / 5) * 5, debtCap));
+  }
+  const extra = windowMin != null
+    ? Math.max(0, Math.min(90, Math.floor(windowMin / 15) * 15)) // fit the real evening
+    : Math.max(0, Math.min(60, Math.round(debtMin / 5 / 15) * 15)); // default pacing
+  return Math.min(extra, debtCap);
+}
+
+// How long the evening lets tonight's sleep run beyond the need: from the
+// last event's end (plus a wind-down buffer) to the wake target.
+export const WIND_DOWN_BUFFER_MIN = 45;
+export function eveningWindowMin({ lastEventEnd, wakeTarget, needMin }) {
+  if (!lastEventEnd || !wakeTarget) return null;
+  const earliestBed = lastEventEnd.getTime() + WIND_DOWN_BUFFER_MIN * MS_PER_MIN;
+  return Math.floor((wakeTarget.getTime() - earliestBed) / MS_PER_MIN) - needMin;
 }
 
 // Circular mean of recent main-session wake times, as minute-of-day.
@@ -68,22 +88,34 @@ export function resolveWakeTarget({
   return { wakeTarget: atMinute(tomorrow, 7 * 60), source: 'default' };
 }
 
-// Tonight's plan: recommended bedtime (need + gentle repayment ahead of the
-// wake target) and the caffeine cutoff counted back from that bedtime.
+// Tonight's plan: recommended bedtime (need + repayment ahead of the wake
+// target) and the caffeine cutoff counted back from that bedtime.
+// lastEventEnd (today's final calendar event) lets auto mode size the
+// repayment to the evening that actually exists.
 export function bedtimePlan({
   nights = [],
   settings = {},
   debtMin = 0,
   now = new Date(),
   tomorrowFirstEvent = null,
+  lastEventEnd = null,
 } = {}) {
   const needMin = settings.needMin ?? 480;
   const { wakeTarget, source } = resolveWakeTarget({ nights, settings, now, tomorrowFirstEvent });
-  const extraMin = repaymentExtraMin(debtMin);
+  const mode = settings.repayMode ?? 'auto';
+  const windowMin = mode === 'auto'
+    ? eveningWindowMin({ lastEventEnd, wakeTarget, needMin })
+    : null;
+  const extraMin = repaymentExtraMin(debtMin, {
+    mode,
+    fixedMin: settings.repayFixedMin ?? 30,
+    windowMin,
+  });
   const sleepMin = needMin + extraMin;
   const bedtime = new Date(wakeTarget.getTime() - sleepMin * MS_PER_MIN);
   const caffeineCutoff = new Date(bedtime.getTime() - (settings.caffeineGapMin ?? 600) * MS_PER_MIN);
-  return { wakeTarget, wakeSource: source, extraMin, sleepMin, bedtime, caffeineCutoff };
+  const repayBasis = mode === 'fixed' ? 'fixed' : windowMin != null ? 'auto-calendar' : 'auto';
+  return { wakeTarget, wakeSource: source, extraMin, sleepMin, bedtime, caffeineCutoff, repayBasis };
 }
 
 // ---- calendar helpers ----

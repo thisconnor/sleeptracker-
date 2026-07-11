@@ -21,7 +21,7 @@ import {
 } from '../js/store.js';
 import {
   repaymentExtraMin, resolveWakeTarget, bedtimePlan, busyBlocks,
-  dayStartFromEvents, napSuggestions, freeGaps,
+  dayStartFromEvents, napSuggestions, freeGaps, eveningWindowMin,
 } from '../js/planner.js';
 
 const D = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi);
@@ -546,6 +546,50 @@ test('repayment pacing: gentle, stepped, capped at an hour', () => {
   assertEq(repaymentExtraMin(120), 30);
   assertEq(repaymentExtraMin(300), 60);
   assertEq(repaymentExtraMin(900), 60, 'capped');
+});
+
+test('repayment modes: fixed clamps to debt, auto fits the calendar evening', () => {
+  assertEq(repaymentExtraMin(300, { mode: 'fixed', fixedMin: 45 }), 45);
+  assertEq(repaymentExtraMin(20, { mode: 'fixed', fixedMin: 45 }), 20, 'no repaying into oversleep');
+  assertEq(repaymentExtraMin(0, { mode: 'fixed', fixedMin: 45 }), 0);
+  assertEq(repaymentExtraMin(600, { mode: 'auto', windowMin: 200 }), 90, 'free evening caps at 90');
+  assertEq(repaymentExtraMin(600, { mode: 'auto', windowMin: 40 }), 30, 'tight evening shrinks the plan');
+  assertEq(repaymentExtraMin(600, { mode: 'auto', windowMin: -30 }), 0, 'evening barely fits the need');
+  assertEq(repaymentExtraMin(45, { mode: 'auto', windowMin: 200 }), 45, 'never exceeds remaining debt');
+});
+
+test('evening window: last event + wind-down buffer to wake target, minus need', () => {
+  const win = eveningWindowMin({
+    lastEventEnd: D(2026, 6, 11, 21, 0),
+    wakeTarget: D(2026, 6, 12, 7, 0),
+    needMin: 480,
+  });
+  assertEq(win, 75, '21:45 earliest bed -> 7:00 wake = 555m, minus 480 need');
+  assertEq(eveningWindowMin({ lastEventEnd: null, wakeTarget: D(2026, 6, 12, 7, 0), needMin: 480 }), null);
+});
+
+test('bedtimePlan honors repay settings and reports its basis', () => {
+  const base = {
+    nights: [],
+    settings: { needMin: 480, caffeineGapMin: 600, wakeTargetMin: 7 * 60, repayMode: 'fixed', repayFixedMin: 45 },
+    debtMin: 300,
+    now: NOW,
+  };
+  const fixed = bedtimePlan(base);
+  assertEq(fixed.extraMin, 45);
+  assertEq(fixed.repayBasis, 'fixed');
+
+  const autoCal = bedtimePlan({
+    ...base,
+    settings: { ...base.settings, repayMode: 'auto' },
+    lastEventEnd: D(2026, 6, 11, 21, 0),
+  });
+  assertEq(autoCal.repayBasis, 'auto-calendar');
+  assertEq(autoCal.extraMin, 75, 'fits the 75-minute evening window');
+
+  const auto = bedtimePlan({ ...base, settings: { ...base.settings, repayMode: 'auto' } });
+  assertEq(auto.repayBasis, 'auto');
+  assertEq(auto.extraMin, 60);
 });
 
 test('wake target priority: earlier of calendar vs setting, then history, then 7:00', () => {

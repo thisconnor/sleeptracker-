@@ -10,10 +10,14 @@ A private sleep-debt and energy tracker in the spirit of RISE — rebuilt as you
 
 | Tab | What's there |
 |---|---|
-| **Today** | Sleep debt (14-night weighted, with a since-yesterday delta), energy potential, **Tonight** (recommended bedtime with gentle debt repayment, last-caffeine time, wake target), the energy wave with peaks/dip/melatonin window and best nap window, your calendar day-map (if linked), last night, and the last 14 nights. |
+| **Today** | Sleep debt (14-night weighted, with a since-yesterday delta), energy potential, **Log now** (live sleep/nap timer), **Tonight** (recommended bedtime with debt repayment, last-caffeine time, wake target), the energy wave with peaks/dip/melatonin window and best nap window, your calendar day-map (if linked), last night, and the last 14 nights. |
 | **Sleep** | The editable log. Every session is a pill — tap to adjust times, switch sleep↔nap, or delete. Add missing nights or naps. Manual edits win over imports and survive re-imports. |
-| **Trends** | Sleep debt, nightly durations, and sleep-timing consistency over 2 weeks / 30 / 90 days. History accumulates automatically from your daily check-ins. |
-| **Settings** | Account, sleep need (with a data-driven suggestion), wake target, caffeine gap, debt model (recent-weighted vs plain sum), calendar link, export. |
+| **Trends** | Sleep debt, nightly durations, and sleep-timing consistency over 2 weeks / 30 / 90 days, with a **Clean / Detailed** toggle (rolling average, good-zone band, peak marker, weekend shading, midpoint drift). |
+| **Settings** | Account, sleep need (with a data-driven suggestion), wake target, caffeine gap, **debt repayment** (auto or a fixed nightly amount), **fall-asleep margin**, debt model (recent-weighted vs plain sum), calendar link, export. |
+
+**Live logging**: tap *Going to sleep* or *Starting a nap* when you lie down, and *I'm awake* when you get up. Your fall-asleep margin (default 15 min, adjustable) is added to the start automatically, and a confirm sheet lets you adjust both times before anything is saved. Cancelling keeps the timer running; sessions under 3 minutes aren't logged.
+
+**Debt repayment**: *Auto* repays about a fifth of your debt per night (capped at +60 min) — and when your calendar is linked, it sizes tonight's extra sleep to the evening your last event actually leaves free (up to +90 min, never past your remaining debt). *Fixed* aims for the same nightly amount, set in Settings, until the debt is gone.
 
 ## Setup
 

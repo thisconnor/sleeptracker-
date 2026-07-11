@@ -131,16 +131,23 @@ body {
   position: relative;
   border-radius: var(--radius);
   padding: 22px;
-  background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.15),
-    rgba(255, 255, 255, 0.05) 55%,
-    rgba(255, 255, 255, 0.085));
-  -webkit-backdrop-filter: blur(24px) saturate(170%);
-  backdrop-filter: blur(24px) saturate(170%);
+  /* Airier glass: thinner white film, with a periwinkle-to-peach shimmer
+     underneath so the cards pick up the sky instead of going gray. */
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.12),
+      rgba(255, 255, 255, 0.03) 55%,
+      rgba(255, 255, 255, 0.06)),
+    linear-gradient(135deg,
+      rgba(139, 157, 255, 0.13),
+      rgba(139, 157, 255, 0.02) 45%,
+      rgba(255, 179, 133, 0.10));
+  -webkit-backdrop-filter: blur(22px) saturate(200%);
+  backdrop-filter: blur(22px) saturate(200%);
   border: 1px solid var(--stroke);
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
     inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -150,8 +157,8 @@ body {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(115deg, rgba(255, 255, 255, 0.16), transparent 40%);
-  opacity: 0.55;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.22), transparent 42%);
+  opacity: 0.6;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -484,7 +491,11 @@ input[type="datetime-local"], input[type="time"] {
 .tonight-tile {
   border: 1px solid var(--stroke);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.06);
+  background: linear-gradient(160deg,
+    rgba(139, 157, 255, 0.14),
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 179, 133, 0.10));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   padding: 14px 10px;
   text-align: center;
   display: flex;
@@ -692,7 +703,43 @@ button.pill:active { transform: scale(0.97); }
   display: inline-block;
 }
 
+/* --------------------------------------------------------------- log now */
+
+.lognow-idle { margin-top: 2px; }
+.lognow-idle .btn { flex: 1; min-width: 150px; }
+
+.lognow-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lognow-active .btn-row { margin-top: 0; }
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--glow);
+  box-shadow: 0 0 8px rgba(255, 179, 133, 0.9);
+  vertical-align: 0.05em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .live-dot { animation: livePulse 1.8s ease-in-out infinite; }
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+}
+
 /* ---------------------------------------------------------------- trends */
+
+.trend-controls { display: flex; flex-direction: column; gap: 8px; }
+#trend-detail { max-width: 240px; }
 
 .stat-row { display: flex; gap: 10px; }
 
@@ -700,7 +747,11 @@ button.pill:active { transform: scale(0.97); }
   flex: 1;
   border: 1px solid var(--stroke);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.06);
+  background: linear-gradient(160deg,
+    rgba(139, 157, 255, 0.13),
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 179, 133, 0.09));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
   padding: 12px 8px;
   display: flex;
   flex-direction: column;

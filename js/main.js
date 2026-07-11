@@ -6,7 +6,7 @@ import {
   sleepDebtMin, debtZone, debtSeries, energyPotential, suggestNeed, consistencyScore,
 } from './metrics.js';
 import { buildSchedule } from './schedule.js';
-import { bedtimePlan, napSuggestions } from './planner.js';
+import { bedtimePlan, napSuggestions, busyBlocks } from './planner.js';
 import { demoStoreRows } from './demo.js';
 import {
   sessionsToRows, mergeImport, nightsFromRows, applyEdit, makeManualRow,
@@ -19,6 +19,8 @@ const $ = (id) => document.getElementById(id);
 
 const GUEST_KEY = 'guestMode.v1';
 const CAL_LINKED_KEY = 'calendarLinked.v1';
+const TIMER_KEY = 'activeTimer.v1';
+const TREND_DETAIL_KEY = 'trendDetail.v1';
 
 const state = {
   api: null,
@@ -30,7 +32,10 @@ const state = {
   skipped: 0,
   view: 'today',
   trendRange: 14,
+  trendDetail: 'clean',
   editing: null, // { rowId } | { dateKey } | null
+  timer: null, // { startedAt: ISO, kind } while a live sleep/nap is running
+  timerPending: false, // the confirm sheet for a finished timer is open
   calendar: { linked: false, todayEvents: [], tomorrowFirstEvent: null, error: null },
   calendarConfigured: cal.calendarConfigured(),
   pendingImport: null, // rows parsed from the hash while signed out
@@ -60,12 +65,14 @@ function compute() {
   const energy = energyPotential(debtMin);
   const schedule = buildSchedule(nights14, needMin, energy, now);
   const dip = schedule.zones.find((z) => z.id === 'dip');
+  const todayBlocks = state.calendar.linked ? busyBlocks(state.calendar.todayEvents) : [];
   const plan = bedtimePlan({
     nights: nights14,
     settings: state.settings,
     debtMin,
     now,
     tomorrowFirstEvent: state.calendar.linked ? state.calendar.tomorrowFirstEvent : null,
+    lastEventEnd: todayBlocks.length ? todayBlocks[todayBlocks.length - 1].end : null,
   });
   const napSlot = napSuggestions({
     events: state.calendar.linked ? state.calendar.todayEvents : [],
@@ -97,6 +104,7 @@ function compute() {
     isDemo: isDemo(),
     inBedFallback: state.inBedFallback ?? false,
     freshness,
+    marginMin: state.settings.sleepOnsetMarginMin ?? 15,
   };
 }
 
@@ -106,13 +114,14 @@ function render() {
   $('welcome-card').hidden = activeRows().some((r) => !r.deleted);
   if (state.view === 'today') {
     $('view-subtitle').textContent = ui.greetingSubtitle(vm.now, vm.freshness);
+    ui.renderLogNow(vm, state.timer);
     ui.renderToday(vm);
   } else if (state.view === 'sleep') {
     $('view-subtitle').textContent = '';
     ui.renderSleepLog(vm);
   } else if (state.view === 'trends') {
     $('view-subtitle').textContent = '';
-    ui.renderTrends(vm, state.trendRange);
+    ui.renderTrends(vm, state.trendRange, state.trendDetail);
   } else if (state.view === 'settings') {
     $('view-subtitle').textContent = '';
     ui.renderSettings(state, vm);
@@ -254,6 +263,8 @@ async function onSignedIn(user) {
 async function boot() {
   ui.injectIcons();
   bindEvents();
+  state.timer = readTimer();
+  state.trendDetail = safeGet(TREND_DETAIL_KEY) === 'advanced' ? 'advanced' : 'clean';
   state.api = await initApi();
   state.settings = await state.api.settings.load();
 
@@ -301,6 +312,10 @@ function bindEvents() {
     else if (a === 'add-session') openEditorNew(null);
     else if (a === 'goto-sleep') switchView('sleep');
     else if (a === 'exit-demo') exitDemo();
+    else if (a === 'try-demo') { location.hash = 'demo'; }
+    else if (a === 'timer-start') startTimer(el.dataset.kind);
+    else if (a === 'timer-finish') finishTimer();
+    else if (a === 'timer-discard') discardTimer();
     else if (a === 'sign-out') state.api.auth.signOut();
     else if (a === 'go-auth') { safeDel(GUEST_KEY); state.guest = false; location.reload(); }
     else if (a === 'cal-link') linkCalendar();
@@ -364,6 +379,16 @@ function bindEvents() {
   $('caff-plus').addEventListener('click', () => bumpSetting('caffeineGapMin', 30, 240, 840));
   $('prep-minus').addEventListener('click', () => bumpSetting('prepBufferMin', -15, 0, 180));
   $('prep-plus').addEventListener('click', () => bumpSetting('prepBufferMin', 15, 0, 180));
+  $('repay-minus').addEventListener('click', () => bumpSetting('repayFixedMin', -15, 0, 120));
+  $('repay-plus').addEventListener('click', () => bumpSetting('repayFixedMin', 15, 0, 120));
+  $('margin-minus').addEventListener('click', () => bumpSetting('sleepOnsetMarginMin', -5, 0, 45));
+  $('margin-plus').addEventListener('click', () => bumpSetting('sleepOnsetMarginMin', 5, 0, 45));
+  for (const b of document.querySelectorAll('#repay-mode button')) {
+    b.addEventListener('click', async () => {
+      state.settings = await state.api.settings.save({ repayMode: b.dataset.repay });
+      render();
+    });
+  }
 
   $('wake-auto').addEventListener('change', async (e) => {
     if (e.target.checked) {
@@ -433,10 +458,17 @@ function bindEvents() {
     URL.revokeObjectURL(a.href);
   });
 
-  // trends range
+  // trends range + detail
   for (const b of document.querySelectorAll('#trend-range button')) {
     b.addEventListener('click', () => {
       state.trendRange = Number(b.dataset.range);
+      render();
+    });
+  }
+  for (const b of document.querySelectorAll('#trend-detail button')) {
+    b.addEventListener('click', () => {
+      state.trendDetail = b.dataset.detail;
+      safeSet(TREND_DETAIL_KEY, state.trendDetail);
       render();
     });
   }
@@ -449,6 +481,11 @@ function bindEvents() {
   $('edit-end').addEventListener('input', ui.updateEditorDuration);
   $('editor-close').addEventListener('click', ui.closeEditor);
   $('edit-cancel').addEventListener('click', ui.closeEditor);
+  $('editor').addEventListener('close', () => {
+    // Cancelling the confirm sheet keeps a finished timer running so the
+    // user can re-open it; only a save or an explicit discard clears it.
+    if (state.timerPending) { state.timerPending = false; render(); }
+  });
   $('editor-form').addEventListener('submit', (e) => { e.preventDefault(); saveEditor(); });
   $('edit-delete').addEventListener('click', deleteEditor);
   $('editor').addEventListener('click', (e) => {
@@ -512,6 +549,7 @@ async function saveEditor() {
     } else {
       await state.api.rows.insert([makeManualRow({ start, end, kind })]);
     }
+    clearTimerAfterSave();
     await reloadRows();
     ui.closeEditor();
     ui.toast('Saved');
@@ -533,6 +571,73 @@ async function deleteEditor() {
     ui.editorError(err.message ?? 'Could not delete.');
   }
 }
+
+// ---------------------------------------------------------- live logging
+
+function readTimer() {
+  try {
+    const t = JSON.parse(safeGet(TIMER_KEY));
+    if (t?.startedAt && ['sleep', 'nap'].includes(t.kind)) {
+      // A forgotten timer older than 24h is stale, not a sleep record.
+      if (Date.now() - new Date(t.startedAt).getTime() < 24 * 3600e3) return t;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function startTimer(kind) {
+  if (isDemo()) { ui.toast('Exit the demo first', 'warn'); return; }
+  state.timer = { startedAt: new Date().toISOString(), kind: kind === 'nap' ? 'nap' : 'sleep' };
+  safeSet(TIMER_KEY, JSON.stringify(state.timer));
+  ui.toast(kind === 'nap' ? 'Nap timer running — tap "I\'m awake" after' : 'Sleep timer running — see you in the morning');
+  render();
+}
+
+function finishTimer() {
+  if (!state.timer) return;
+  const pressed = new Date(state.timer.startedAt);
+  const end = new Date();
+  const margin = state.settings.sleepOnsetMarginMin ?? 15;
+  const elapsedMin = (end - pressed) / 60000;
+  if (elapsedMin < 3) {
+    ui.toast('Under 3 minutes — nothing worth logging yet. Keep resting, or discard the timer.', 'warn');
+    return;
+  }
+  // Apply the fall-asleep margin unless it would eat the whole session.
+  const appliedMargin = elapsedMin - margin >= 5 ? margin : 0;
+  const start = new Date(pressed.getTime() + appliedMargin * 60000);
+  state.editing = { rowId: null };
+  state.timerPending = true;
+  ui.openEditor({
+    prefill: { start, end, kind: state.timer.kind },
+    title: 'Confirm your sleep',
+    note: appliedMargin > 0
+      ? `Start includes your ${appliedMargin}-minute fall-asleep margin (button pressed ${ui.fmtClock(pressed)}). Adjust anything before saving.`
+      : 'Too short for the fall-asleep margin — times are exactly as pressed. Adjust anything before saving.',
+  });
+}
+
+function discardTimer() {
+  state.timer = null;
+  state.timerPending = false;
+  safeDel(TIMER_KEY);
+  ui.toast('Timer discarded');
+  render();
+}
+
+function clearTimerAfterSave() {
+  if (!state.timerPending) return;
+  state.timer = null;
+  state.timerPending = false;
+  safeDel(TIMER_KEY);
+}
+
+// Keep the elapsed readout fresh while a timer runs.
+setInterval(() => {
+  if (state.timer && state.view === 'today' && !document.hidden && !document.getElementById('editor').open) {
+    render();
+  }
+}, 60000);
 
 // ----------------------------------------------------------------- demo
 
