@@ -4,61 +4,94 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#070A18" />
-  <meta name="description" content="A private morning sleep check-in: sleep debt and energy schedule from your Apple Health data, computed entirely on your device." />
+  <meta name="description" content="A private sleep-debt and energy tracker: Apple Health in, insight out. Your data, your account, no ads." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Sleep" />
   <title>Sleep Check-in</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="stylesheet" href="css/style.css" />
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <div class="sky" aria-hidden="true"></div>
+  <div class="sky" aria-hidden="true"><div class="sky-sun"></div></div>
 
-  <main class="app">
-    <header class="topbar">
-      <div>
-        <h1 id="greeting">Good morning</h1>
-        <p class="sub" id="dateline"></p>
-      </div>
-      <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3.2"/>
-          <path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V19.6a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.12-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H4.4a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 6.05 7.4a1.7 1.7 0 0 0-.34-1.87l-.06-.06A2 2 0 1 1 8.48 2.64l.06.06a1.7 1.7 0 0 0 1.87.34h.08A1.7 1.7 0 0 0 11.5 1.48V1.4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.56 1.02h.15a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.57 1.03Z"/>
-        </svg>
-      </button>
-    </header>
+  <div id="splash"><div class="splash-moon"></div></div>
 
-    <section id="empty" hidden>
-      <article class="card hero empty-hero">
-        <div class="moon" aria-hidden="true">
-          <svg viewBox="0 0 64 64" width="56" height="56" fill="none" aria-hidden="true">
+  <!-- ======================================================= auth gate -->
+  <section id="auth" class="auth" hidden>
+    <div class="auth-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="64" height="64" fill="none">
             <defs>
-              <linearGradient id="moonGrad" x1="0" y1="0" x2="1" y2="1">
+              <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0" stop-color="#8B9DFF"/><stop offset="1" stop-color="#FFB385"/>
               </linearGradient>
             </defs>
-            <path d="M42 8a26 26 0 1 0 14 34A22 22 0 0 1 42 8Z" stroke="url(#moonGrad)" stroke-width="2.5" stroke-linejoin="round"/>
+            <circle cx="32" cy="32" r="26" stroke="url(#brandGrad)" stroke-width="2.5" opacity=".45"/>
+            <path d="M40 16a18 18 0 1 0 8 24 15 15 0 0 1-8-24Z" stroke="url(#brandGrad)" stroke-width="2.5" stroke-linejoin="round"/>
           </svg>
         </div>
-        <h2>Your morning sleep check-in</h2>
-        <p class="lede">Run the Shortcut on your iPhone after you wake up. It reads your last 14 days of Apple Health sleep and opens this page with everything it needs — no account, no server, nothing stored anywhere but your device.</p>
+        <h1>Sleep Check-in</h1>
+        <p class="sub">Sleep debt, energy, and tonight's plan — computed from your own data.</p>
+      </div>
+
+      <form id="auth-form" class="card auth-card">
+        <label class="field">
+          <span>Email</span>
+          <input id="auth-email" type="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" />
+        </label>
+        <label class="field" id="auth-password-field">
+          <span>Password</span>
+          <input id="auth-password" type="password" autocomplete="current-password" minlength="8" placeholder="••••••••" />
+        </label>
+        <p class="sub error" id="auth-error" hidden></p>
+        <p class="sub ok" id="auth-info" hidden></p>
+        <div class="auth-actions">
+          <button type="submit" class="btn primary" id="auth-signin">Sign in</button>
+          <button type="button" class="btn" id="auth-signup">Create account</button>
+        </div>
+        <div class="auth-alt">
+          <button type="button" class="link-btn" id="auth-magic">Email me a magic link instead</button>
+          <button type="button" class="link-btn" id="auth-reset">Forgot password?</button>
+        </div>
+      </form>
+
+      <button type="button" class="link-btn dim" id="auth-guest">Continue without an account →</button>
+      <p class="footnote" id="auth-note"></p>
+    </div>
+  </section>
+
+  <!-- ======================================================== main app -->
+  <main id="app" class="app" hidden>
+    <header class="topbar">
+      <div>
+        <h1 id="view-title">Today</h1>
+        <p class="sub" id="view-subtitle"></p>
+      </div>
+      <div class="topbar-side" id="topbar-side"></div>
+    </header>
+
+    <!-- ------------------------------------------------------- Today -->
+    <section id="view-today" class="view" hidden>
+      <article class="card" id="welcome-card" hidden>
+        <p class="card-label">Welcome</p>
+        <h2 class="welcome-title">Your morning sleep check-in</h2>
+        <p class="lede">Run the iOS Shortcut after you wake — it reads your last 14 days of Apple Health sleep and opens this page with everything it needs. Sessions sync to your log, so history builds up night after night.</p>
         <div class="btn-row">
-          <button class="btn primary" id="demo-btn">See it with demo data</button>
+          <button class="btn primary" data-action="try-demo">See it with demo data</button>
           <a class="btn" href="https://github.com/thisconnor/sleeptracker-#set-up-the-iphone-shortcut" target="_blank" rel="noopener">Set up the Shortcut</a>
         </div>
       </article>
-      <article class="card">
-        <p class="card-label">Or paste instead</p>
-        <p class="sub">Paste the link the Shortcut produces (or just its data part):</p>
-        <textarea id="paste-box" rows="3" placeholder="https://…/#v=1&amp;d=…" spellcheck="false"></textarea>
-        <div class="btn-row">
-          <button class="btn" id="paste-btn">Load</button>
-        </div>
-        <p class="sub error" id="paste-error" hidden></p>
-      </article>
-    </section>
 
-    <section id="dashboard" hidden>
       <article class="card hero">
-        <p class="card-label">Sleep debt</p>
+        <div class="card-head">
+          <p class="card-label">Sleep debt</p>
+          <span class="chip dim" id="debt-delta" hidden></span>
+        </div>
         <div class="gauge-wrap">
           <div id="gauge" class="chart"></div>
           <div class="gauge-center">
@@ -72,13 +105,28 @@
         </div>
       </article>
 
+      <article class="card" id="tonight-card">
+        <p class="card-label">Tonight</p>
+        <div class="tonight-grid" id="tonight-grid"></div>
+        <p class="sub" id="tonight-note"></p>
+      </article>
+
       <article class="card">
         <div class="card-head">
           <p class="card-label">Energy schedule</p>
           <p class="sub" id="wake-line"></p>
         </div>
-        <div id="energy-chart" class="chart"></div>
+        <div id="energy-chart" class="chart chart-tips"></div>
         <ul id="zones-list" class="zones"></ul>
+      </article>
+
+      <article class="card" id="daymap-card" hidden>
+        <div class="card-head">
+          <p class="card-label">Your day</p>
+          <p class="sub" id="daymap-sub"></p>
+        </div>
+        <div id="daymap-chart" class="chart chart-tips"></div>
+        <p class="sub" id="daymap-note"></p>
       </article>
 
       <article class="card">
@@ -90,72 +138,170 @@
       </article>
 
       <article class="card">
-        <p class="card-label">Last 14 nights</p>
-        <div id="history-chart" class="chart"></div>
-        <p class="sub center" id="history-caption"></p>
+        <div class="card-head">
+          <p class="card-label">Last 14 nights</p>
+          <p class="sub"><i class="dot dot-a"></i>sleep <i class="dot dot-b"></i>naps</p>
+        </div>
+        <div id="history-chart" class="chart chart-tips"></div>
+      </article>
+
+      <p class="footnote" id="data-note" hidden></p>
+    </section>
+
+    <!-- ------------------------------------------------------- Sleep -->
+    <section id="view-sleep" class="view" hidden>
+      <div id="log-summary" class="log-summary"></div>
+      <div id="log-list" class="log-list"></div>
+    </section>
+
+    <!-- ------------------------------------------------------ Trends -->
+    <section id="view-trends" class="view" hidden>
+      <div class="segmented" id="trend-range" role="tablist" aria-label="Range">
+        <button data-range="14" class="active" role="tab">2 weeks</button>
+        <button data-range="30" role="tab">30 days</button>
+        <button data-range="90" role="tab">90 days</button>
+      </div>
+      <div id="trend-stats" class="stat-row"></div>
+      <article class="card">
+        <p class="card-label">Sleep debt</p>
+        <div id="trend-debt" class="chart chart-tips"></div>
+      </article>
+      <article class="card">
+        <p class="card-label">Nightly sleep</p>
+        <div id="trend-duration" class="chart chart-tips"></div>
+      </article>
+      <article class="card">
+        <div class="card-head">
+          <p class="card-label">Sleep times</p>
+          <span class="chip" id="consistency-chip"></span>
+        </div>
+        <div id="trend-times" class="chart chart-tips"></div>
+        <p class="sub center">Each capsule is one night, bed to wake — a tighter column means a steadier body clock. <i class="dot dot-b"></i>naps</p>
+      </article>
+    </section>
+
+    <!-- ---------------------------------------------------- Settings -->
+    <section id="view-settings" class="view" hidden>
+      <article class="card">
+        <p class="card-label">Account</p>
+        <div id="acct-body"></div>
       </article>
 
       <article class="card">
-        <div class="card-head">
-          <p class="card-label">Consistency</p>
-          <span class="chip" id="consistency-chip"></span>
+        <p class="card-label">Sleep need</p>
+        <div class="stepper">
+          <button id="need-minus" class="step-btn" aria-label="Decrease by 15 minutes">−</button>
+          <span id="need-value" class="need-value">8h</span>
+          <button id="need-plus" class="step-btn" aria-label="Increase by 15 minutes">+</button>
         </div>
-        <div id="consistency-chart" class="chart"></div>
-        <p class="sub center">Midpoint of each night's sleep — a tighter line means a steadier body clock.</p>
+        <p class="sub" id="need-suggestion" hidden>
+          Your longest typical nights suggest <strong id="suggestion-value"></strong>.
+          <button class="btn small" id="use-suggestion">Use it</button>
+        </p>
+        <p class="sub">Sleep debt is measured against this nightly need.</p>
       </article>
 
-      <p class="footnote" id="data-note"></p>
+      <article class="card">
+        <p class="card-label">Tonight's plan</p>
+        <div class="setting-row">
+          <span>Wake target</span>
+          <span class="setting-controls">
+            <input type="time" id="wake-target" step="300" />
+            <label class="mini-check"><input type="checkbox" id="wake-auto" /> auto</label>
+          </span>
+        </div>
+        <div class="setting-row">
+          <span>Caffeine cutoff</span>
+          <span class="setting-controls stepper-mini">
+            <button id="caff-minus" class="step-btn sm" aria-label="Less">−</button>
+            <span id="caff-value">10h</span>
+            <button id="caff-plus" class="step-btn sm" aria-label="More">+</button>
+            <span class="sub">before bed</span>
+          </span>
+        </div>
+        <div class="setting-row" id="prep-row" hidden>
+          <span>Prep before first event</span>
+          <span class="setting-controls stepper-mini">
+            <button id="prep-minus" class="step-btn sm" aria-label="Less">−</button>
+            <span id="prep-value">60m</span>
+            <button id="prep-plus" class="step-btn sm" aria-label="More">+</button>
+          </span>
+        </div>
+      </article>
+
+      <article class="card">
+        <p class="card-label">Debt model</p>
+        <div class="segmented" id="debt-mode">
+          <button data-mode="weighted" class="active">Recent-weighted</button>
+          <button data-mode="plain">Plain sum</button>
+        </div>
+        <p class="sub" id="debt-mode-note"></p>
+      </article>
+
+      <article class="card" id="cal-card">
+        <p class="card-label">Google Calendar</p>
+        <div id="cal-body"></div>
+      </article>
+
+      <article class="card">
+        <p class="card-label">Data</p>
+        <p class="sub">Your Shortcut's link (step 5 of the README recipe):</p>
+        <code class="snippet" id="url-snippet"></code>
+        <div class="btn-row">
+          <button class="btn small" id="copy-snippet">Copy</button>
+          <span class="sub ok" id="copy-done" hidden>Copied</span>
+        </div>
+        <textarea id="paste-box" rows="2" placeholder="Paste a check-in link…" spellcheck="false"></textarea>
+        <div class="btn-row">
+          <button class="btn small" id="paste-btn">Load pasted data</button>
+          <button class="btn small" id="demo-btn">Demo data</button>
+          <button class="btn small" id="export-btn">Export JSON</button>
+        </div>
+        <p class="sub error" id="paste-error" hidden></p>
+      </article>
+
+      <p class="footnote">Sleep data syncs only to <em>your</em> account and is protected by row-level security. Check-in links keep the data after the&nbsp;#, which never reaches any server. Calendar access, if linked, stays entirely in this browser.</p>
     </section>
 
-    <footer class="footer">
-      <p>Your sleep data lives in this page's link after the&nbsp;# and is read entirely on this device — it is never sent to any server.</p>
-    </footer>
+    <!-- -------------------------------------------------------- tabs -->
+    <nav class="tabbar" aria-label="Sections">
+      <button data-view="today" class="tab active"><span class="tab-icon" data-icon="today"></span>Today</button>
+      <button data-view="sleep" class="tab"><span class="tab-icon" data-icon="moon"></span>Sleep</button>
+      <button data-view="trends" class="tab"><span class="tab-icon" data-icon="trend"></span>Trends</button>
+      <button data-view="settings" class="tab"><span class="tab-icon" data-icon="gear"></span>Settings</button>
+    </nav>
   </main>
 
-  <dialog id="settings" class="sheet">
+  <!-- ------------------------------------------------- session editor -->
+  <dialog id="editor" class="sheet">
     <div class="sheet-head">
-      <h2>Settings</h2>
-      <button class="icon-btn" id="settings-close" aria-label="Close">
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>
-      </button>
+      <h2 id="editor-title">Edit sleep</h2>
+      <button class="icon-btn" id="editor-close" aria-label="Close"><span data-icon="x"></span></button>
     </div>
-
-    <div class="setting">
-      <p class="card-label">Sleep need</p>
-      <div class="stepper">
-        <button id="need-minus" class="step-btn" aria-label="Decrease by 15 minutes">−</button>
-        <span id="need-value" class="need-value">8h</span>
-        <button id="need-plus" class="step-btn" aria-label="Increase by 15 minutes">+</button>
+    <form id="editor-form">
+      <div class="segmented" id="edit-kind">
+        <button type="button" data-kind="sleep" class="active">Sleep</button>
+        <button type="button" data-kind="nap">Nap</button>
       </div>
-      <p class="sub" id="need-suggestion" hidden>
-        From your last two weeks, your longest typical nights suggest
-        <strong id="suggestion-value"></strong>.
-        <button class="btn small" id="use-suggestion">Use it</button>
-      </p>
-      <p class="sub">Sleep debt is measured against this nightly need.</p>
-    </div>
-
-    <div class="setting">
-      <p class="card-label">Make it permanent</p>
-      <p class="sub">Safari forgets settings after a week of no visits, so put your need inside the Shortcut's link — step 5 of the setup guide:</p>
-      <code class="snippet" id="url-snippet"></code>
-      <div class="btn-row">
-        <button class="btn small" id="copy-snippet">Copy</button>
-        <span class="sub" id="copy-done" hidden>Copied</span>
+      <label class="field">
+        <span>Fell asleep</span>
+        <input type="datetime-local" id="edit-start" required />
+      </label>
+      <label class="field">
+        <span>Woke up</span>
+        <input type="datetime-local" id="edit-end" required />
+      </label>
+      <p class="sub" id="edit-duration"></p>
+      <p class="sub error" id="edit-error" hidden></p>
+      <div class="btn-row spread">
+        <button type="button" class="btn danger small" id="edit-delete" hidden>Delete</button>
+        <span style="flex:1"></span>
+        <button type="button" class="btn small" id="edit-cancel">Cancel</button>
+        <button type="submit" class="btn primary small" id="edit-save">Save</button>
       </div>
-    </div>
-
-    <div class="setting">
-      <p class="card-label">Data</p>
-      <div class="btn-row">
-        <button class="btn small" id="demo-btn-2">Load demo data</button>
-      </div>
-      <textarea id="paste-box-2" rows="2" placeholder="Paste a check-in link…" spellcheck="false"></textarea>
-      <div class="btn-row">
-        <button class="btn small" id="paste-btn-2">Load pasted data</button>
-        <span class="sub error" id="paste-error-2" hidden></span>
-      </div>
-    </div>
+    </form>
   </dialog>
+
+  <div id="toast" class="toast" hidden></div>
 </body>
 </html>

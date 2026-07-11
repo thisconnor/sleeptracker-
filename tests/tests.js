@@ -14,7 +14,15 @@ import {
   energyAt, todayWake, predictedBed, buildZones, curvePoints,
 } from '../js/schedule.js';
 import { clampNeed, resolveNeed, DEFAULT_NEED_MIN } from '../js/settings.js';
-import { demoRows, makeDemoFragment } from '../js/demo.js';
+import { demoRows, makeDemoFragment, demoStoreRows } from '../js/demo.js';
+import {
+  hashInterval, sessionsToRows, mergeImport, applyEdit, makeManualRow,
+  nightsFromRows, rowToJSON, rowFromJSON,
+} from '../js/store.js';
+import {
+  repaymentExtraMin, resolveWakeTarget, bedtimePlan, busyBlocks,
+  dayStartFromEvents, napSuggestions, freeGaps,
+} from '../js/planner.js';
 
 const D = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi);
 const NOW = D(2026, 6, 11, 7, 30); // fixed "this morning" for determinism
@@ -439,6 +447,219 @@ test('messy demo: malformed rows are skipped, the rest still assemble', () => {
 
 test('demo rows are deterministic', () => {
   assertEq(demoRows('watch', NOW), demoRows('watch', NOW));
+});
+
+// ------------------------------------------------------------ store rows
+
+const mkRow = (start, end, over = {}) => ({
+  id: over.id ?? `r-${start.getTime()}`,
+  start,
+  end,
+  kind: over.kind ?? 'sleep',
+  asleepMin: over.asleepMin ?? (end - start) / MIN,
+  inBedMin: over.inBedMin ?? null,
+  stages: over.stages ?? null,
+  source: over.source ?? 'import',
+  importHash: 'importHash' in over ? over.importHash : hashInterval(start, end),
+  deleted: over.deleted ?? false,
+});
+
+test('sessionsToRows carries kind, stages and hashes', () => {
+  const { sessions } = buildSessions([
+    { start: D(2026, 6, 10, 23, 0), end: D(2026, 6, 11, 6, 30), stage: 'A' },
+    { start: D(2026, 6, 11, 14, 0), end: D(2026, 6, 11, 14, 40), stage: 'A' },
+  ]);
+  const rows = sessionsToRows(sessions);
+  assertEq(rows.length, 2);
+  assertEq(rows[0].kind, 'sleep');
+  assertEq(rows[1].kind, 'nap');
+  assertEq(rows[0].importHash, hashInterval(D(2026, 6, 10, 23, 0), D(2026, 6, 11, 6, 30)));
+  assertEq(rows[0].source, 'import');
+});
+
+test('mergeImport skips known hashes, tombstones and edited rows', () => {
+  const a = mkRow(D(2026, 6, 10, 23, 0), D(2026, 6, 11, 6, 30));
+  const incomingSame = mkRow(D(2026, 6, 10, 23, 0), D(2026, 6, 11, 6, 30), { id: 'new1' });
+  assertEq(mergeImport([a], [incomingSame]).length, 0, 'same hash skipped');
+
+  const deleted = { ...a, deleted: true };
+  assertEq(mergeImport([deleted], [incomingSame]).length, 0, 'tombstone blocks resurrection');
+
+  const edited = applyEdit(a, { start: D(2026, 6, 10, 22, 30) });
+  assertEq(mergeImport([edited], [incomingSame]).length, 0, 'edited row keeps blocking its original');
+});
+
+test('mergeImport skips near-duplicates (shifted boundaries) but accepts new nights', () => {
+  const a = mkRow(D(2026, 6, 10, 23, 0), D(2026, 6, 11, 6, 30));
+  const shifted = mkRow(D(2026, 6, 10, 23, 1), D(2026, 6, 11, 6, 29), { id: 'new2' });
+  assertEq(mergeImport([a], [shifted]).length, 0, 'heavy overlap = duplicate');
+  const nextNight = mkRow(D(2026, 6, 11, 23, 0), D(2026, 6, 12, 6, 30), { id: 'new3' });
+  assertEq(mergeImport([a], [nextNight]).length, 1);
+  const nap = mkRow(D(2026, 6, 11, 14, 0), D(2026, 6, 11, 14, 40), { id: 'new4', kind: 'nap' });
+  assertEq(mergeImport([a], [nap]).length, 1, 'small distinct session accepted');
+});
+
+test('applyEdit flips to manual, keeps hash, recomputes duration, drops stages', () => {
+  const a = mkRow(D(2026, 6, 10, 23, 0), D(2026, 6, 11, 6, 30), {
+    stages: { core: 200, deep: 80, rem: 100, awake: 10 },
+    asleepMin: 380,
+    inBedMin: 460,
+  });
+  const edited = applyEdit(a, { end: D(2026, 6, 11, 7, 0) });
+  assertEq(edited.source, 'manual');
+  assertEq(edited.importHash, a.importHash);
+  assertEq(edited.asleepMin, 480);
+  assertEq(edited.stages, null);
+  const kindOnly = applyEdit(a, { kind: 'nap' });
+  assertEq(kindOnly.asleepMin, 380, 'kind-only edit keeps measured duration');
+});
+
+test('nightsFromRows groups by wake day, honors kind, ignores contained dupes', () => {
+  const rows = [
+    mkRow(D(2026, 6, 10, 23, 0), D(2026, 6, 11, 6, 30)),
+    mkRow(D(2026, 6, 10, 23, 30), D(2026, 6, 11, 5, 0), { id: 'dup', importHash: null }), // contained
+    mkRow(D(2026, 6, 11, 14, 0), D(2026, 6, 11, 14, 40), { kind: 'nap' }),
+    mkRow(D(2026, 6, 9, 22, 0), D(2026, 6, 10, 6, 0)),
+    mkRow(D(2026, 6, 8, 22, 0), D(2026, 6, 9, 6, 0), { deleted: true }),
+  ];
+  const nights = nightsFromRows(rows, NOW, 14);
+  assertClose(nights[0].totalMin, 450 + 40, 0.01, 'contained duplicate ignored, nap counted');
+  assertEq(nights[0].naps.length, 1);
+  assertEq(nights[0].mainSession.isNap, false);
+  assertEq(nights[1].hasData, true);
+  assertEq(nights[2].hasData, false, 'deleted row is invisible');
+});
+
+test('store row JSON round-trip', () => {
+  const a = mkRow(D(2026, 6, 10, 23, 0), D(2026, 6, 11, 6, 30), { stages: { core: 1, deep: 2, rem: 3, awake: 4 } });
+  const back = rowFromJSON(JSON.parse(JSON.stringify(rowToJSON(a))));
+  assertEq(back.start.getTime(), a.start.getTime());
+  assertEq(back.kind, a.kind);
+  assertEq(back.stages.deep, 2);
+  assertEq(back.importHash, a.importHash);
+});
+
+// --------------------------------------------------------------- planner
+
+test('repayment pacing: gentle, stepped, capped at an hour', () => {
+  assertEq(repaymentExtraMin(0), 0);
+  assertEq(repaymentExtraMin(120), 30);
+  assertEq(repaymentExtraMin(300), 60);
+  assertEq(repaymentExtraMin(900), 60, 'capped');
+});
+
+test('wake target priority: earlier of calendar vs setting, then history, then 7:00', () => {
+  const nights = [{ mainSession: { end: D(2026, 6, 11, 6, 45) } }];
+  const cal = resolveWakeTarget({
+    nights,
+    settings: { wakeTargetMin: 9 * 60, prepBufferMin: 60 },
+    now: NOW,
+    tomorrowFirstEvent: D(2026, 6, 12, 9, 0),
+  });
+  assertEq(cal.source, 'calendar', 'event-60m (8:00) beats 9:00 setting');
+  assertEq(cal.wakeTarget.getHours(), 8);
+
+  const setting = resolveWakeTarget({
+    nights,
+    settings: { wakeTargetMin: 6 * 60 + 30, prepBufferMin: 60 },
+    now: NOW,
+    tomorrowFirstEvent: D(2026, 6, 12, 9, 0),
+  });
+  assertEq(setting.source, 'setting', '6:30 setting beats event-derived 8:00');
+
+  const hist = resolveWakeTarget({ nights, settings: {}, now: NOW });
+  assertEq(hist.source, 'history');
+  assertEq(hist.wakeTarget.getMinutes(), 45);
+
+  const dflt = resolveWakeTarget({ nights: [], settings: {}, now: NOW });
+  assertEq(dflt.wakeTarget.getHours(), 7);
+});
+
+test('bedtime plan: need + repayment ahead of wake, caffeine counted back', () => {
+  const plan = bedtimePlan({
+    nights: [],
+    settings: { needMin: 480, caffeineGapMin: 600, wakeTargetMin: 7 * 60 },
+    debtMin: 300,
+    now: NOW,
+  });
+  assertEq(plan.extraMin, 60);
+  assertEq(plan.bedtime.getHours(), 22, 'wake 7:00 − 9h = 22:00');
+  assertEq(plan.caffeineCutoff.getHours(), 12, '22:00 − 10h = 12:00');
+  assertEq(plan.wakeTarget.getDate(), 12, 'wake target is tomorrow');
+});
+
+test('busy blocks merge and day start comes from the first block', () => {
+  const events = [
+    { title: 'b', start: D(2026, 6, 11, 10, 0), end: D(2026, 6, 11, 11, 0) },
+    { title: 'a', start: D(2026, 6, 11, 9, 0), end: D(2026, 6, 11, 10, 30) },
+    { title: 'c', start: D(2026, 6, 11, 15, 0), end: D(2026, 6, 11, 16, 0) },
+  ];
+  const blocks = busyBlocks(events);
+  assertEq(blocks.length, 2);
+  assertEq(dayStartFromEvents(events).getHours(), 9);
+});
+
+test('nap suggestions respect the dip window, meetings, and now', () => {
+  const dip = { start: D(2026, 6, 11, 14, 0), end: D(2026, 6, 11, 16, 30) };
+  const open = napSuggestions({ events: [], dip, now: D(2026, 6, 11, 9, 0) });
+  assertEq(open.length, 1);
+  assertEq(open[0].durationMin, 90, 'open window caps at 90');
+  assertEq(open[0].constrained, false);
+
+  const busy = napSuggestions({
+    events: [{ title: 'm', start: D(2026, 6, 11, 13, 0), end: D(2026, 6, 11, 15, 30) }],
+    dip,
+    now: D(2026, 6, 11, 9, 0),
+  });
+  assertEq(busy.length, 1);
+  assertEq(busy[0].start.getHours(), 15);
+  assertEq(busy[0].start.getMinutes(), 30);
+  assertEq(busy[0].durationMin, 60, 'clipped by the meeting');
+
+  const late = napSuggestions({ events: [], dip, now: D(2026, 6, 11, 16, 15) });
+  assertEq(late.length, 0, 'window nearly over — no suggestion');
+
+  const packed = napSuggestions({
+    events: [{ title: 'm', start: D(2026, 6, 11, 13, 30), end: D(2026, 6, 11, 16, 30) }],
+    dip,
+    now: D(2026, 6, 11, 9, 0),
+  });
+  assertEq(packed.length, 0, 'no gap at all');
+});
+
+test('freeGaps finds openings between blocks', () => {
+  const gaps = freeGaps(
+    [{ title: 'a', start: D(2026, 6, 11, 9, 0), end: D(2026, 6, 11, 12, 0) }],
+    D(2026, 6, 11, 8, 0),
+    D(2026, 6, 11, 18, 0),
+  );
+  assertEq(gaps.length, 2);
+  assertEq(gaps[1].start.getHours(), 12);
+});
+
+// ----------------------------------------------------------- debt modes
+
+test('plain debt mode is a literal clamped sum', () => {
+  const nights = exactNights(420); // 1h short x14
+  assertClose(sleepDebtMin(nights, 480, 'plain'), 840, 1e-9);
+  nights[0] = night(600);
+  assertClose(sleepDebtMin(nights, 480, 'plain'), 840 - 60 - 120, 1e-9, 'oversleep offsets linearly');
+  assertClose(sleepDebtMin(exactNights(600), 480, 'plain'), 0, 1e-9);
+});
+
+// ------------------------------------------------------ demo store rows
+
+test('demoStoreRows builds weeks of coherent history', () => {
+  const rows = demoStoreRows('watch', NOW, 42);
+  assert(rows.length >= 35, `expected >=35 rows, got ${rows.length}`);
+  assert(rows.every((r) => r.importHash && r.end > r.start));
+  const nights = nightsFromRows(rows, NOW, 42);
+  const withData = nights.filter((n) => n.hasData).length;
+  assert(withData >= 30, `expected >=30 nights with data, got ${withData}`);
+  assert(nights[0].hasData, 'last night always present');
+  const withStages = nights.filter((n) => n.mainSession?.hasStages).length;
+  assert(withStages >= 30, 'watch demo carries stages');
+  assertEq(demoStoreRows('watch', NOW, 42).length, rows.length, 'deterministic');
 });
 
 // ------------------------------------------------------------------ done

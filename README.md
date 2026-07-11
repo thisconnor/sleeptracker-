@@ -1,109 +1,91 @@
 # Sleep Check-in
 
-A private, RISE-inspired **morning sleep check-in**. One tap on an iPhone Shortcut reads your last 14 days of Apple Health sleep, packs it into a link, and opens this page — which computes your **sleep debt**, today's **energy schedule**, and other sleep insights, entirely on your device.
+A private sleep-debt and energy tracker in the spirit of RISE — rebuilt as your own. An iOS Shortcut reads your last 14 days of Apple Health sleep and opens this app; the app computes your **sleep debt**, today's **energy schedule**, and **tonight's plan** (recommended bedtime + caffeine cutoff), and — with an account — keeps your history forever, lets you **edit any night or add naps**, and can optionally plan naps and bedtime around your **Google Calendar**.
 
-- **No app, no account, no server.** A static page on GitHub Pages.
-- **Private by construction.** Your sleep data travels in the link *after the `#`* (the URL fragment). Fragments are never sent to any server — the page reads them with JavaScript on your device.
-- **iPhone-only tracking works today; Apple Watch lights up more.** With plain iPhone sleep tracking you get debt, energy schedule, history and consistency. Once a Watch (or any stage-recording device) writes Core/Deep/REM data to Health, a stage breakdown appears automatically.
+- **Frontend**: static, framework-free, hosted on GitHub Pages.
+- **Backend**: [Supabase](https://supabase.com) free tier — accounts (email + password *and* magic links) and a Postgres store guarded by row-level security. Without a backend configured, the app runs in local mode (data stays in the browser).
+- **Privacy**: check-in links carry sleep data after the `#`, which browsers never send to servers. Calendar access, if linked, happens entirely in your browser — events never touch the backend.
 
-## What it shows
+## The tabs
 
-| Card | What it means |
+| Tab | What's there |
 |---|---|
-| **Sleep debt** | How much sleep you owe your body, over a rolling 14-night window, weighted toward recent nights (last night ≈ 15%). ≤ 5h is the good zone. Naps pay debt down; oversleeping offsets it. |
-| **Energy potential** | A 0–100 score of how much your sleep can support you today — it falls as debt rises. |
-| **Energy schedule** | Your predicted energy wave for today, anchored to when you woke: grogginess, morning peak, afternoon dip, evening peak, wind-down, and your ~1-hour **melatonin window** (the ideal time to head to bed). |
-| **Last night** | Duration vs. need, bed/wake times, efficiency, naps — plus a Deep/Core/REM/Awake bar when stage data exists. |
-| **Last 14 nights** | Nightly sleep vs. your need line, naps stacked on top, missing nights hollow, with your debt trend drawn over it. |
-| **Consistency** | How steady your sleep midpoint is night to night — a steadier midpoint means a happier body clock. |
+| **Today** | Sleep debt (14-night weighted, with a since-yesterday delta), energy potential, **Tonight** (recommended bedtime with gentle debt repayment, last-caffeine time, wake target), the energy wave with peaks/dip/melatonin window and best nap window, your calendar day-map (if linked), last night, and the last 14 nights. |
+| **Sleep** | The editable log. Every session is a pill — tap to adjust times, switch sleep↔nap, or delete. Add missing nights or naps. Manual edits win over imports and survive re-imports. |
+| **Trends** | Sleep debt, nightly durations, and sleep-timing consistency over 2 weeks / 30 / 90 days. History accumulates automatically from your daily check-ins. |
+| **Settings** | Account, sleep need (with a data-driven suggestion), wake target, caffeine gap, debt model (recent-weighted vs plain sum), calendar link, export. |
 
-## One-time setup
+## Setup
 
-### 1. Turn on GitHub Pages
+### 1. GitHub Pages (2 minutes)
 
-In this repository: **Settings → Pages → Source: Deploy from a branch → `main` / (root)**. After a minute the page is live at:
+Repo **Settings → Pages → Source: Deploy from a branch → `main` / (root)**. The app goes live at `https://thisconnor.github.io/sleeptracker-/`. It works immediately in local mode — accounts appear after step 2.
 
-```
-https://thisconnor.github.io/sleeptracker-/
-```
+### 2. The backend (10 minutes, free, no card)
 
-(Open it once in Safari — you'll see the welcome screen and a demo button.)
+1. Create an account at [supabase.com](https://supabase.com) → **New project** (any name/region; save the generated database password somewhere).
+2. In the project, open **SQL Editor**, paste the entire contents of [`supabase/schema.sql`](supabase/schema.sql), and **Run** it.
+3. **Authentication → URL Configuration**: set **Site URL** to `https://thisconnor.github.io/sleeptracker-/` and add the same URL under **Redirect URLs** (this is where magic links land).
+4. **Project Settings → API** (or **Settings → Data API** on newer dashboards): copy the **Project URL** and the **anon / public key** into [`js/config.js`](js/config.js):
 
-### 2. Set up the iPhone Shortcut
-
-Open the **Shortcuts** app → **+** → name it something like *Sleep Check-in*, then add these six actions in order:
-
-1. **Find Health Samples**
-   - Tap *All Health Samples* and set the type to **Sleep Analysis** (search "sleep").
-   - Add filter: **Start Date** → **is in the last** → **14** → **days**.
-   - Sort by: **Start Date**, Order: **Oldest First**. Leave *Limit* off.
-
-2. **Repeat with Each** *(it will receive the Health Samples automatically)*
-   - Inside the repeat, add a **Text** action containing exactly:
-
-     ```
-     Start,End,Value
-     ```
-
-     where each piece is a magic variable from **Repeat Item**:
-     - `Start` → tap the variable → choose **Start Date** → tap it again → **Date Format: Custom** → format string: `yyyyMMddHHmm`
-     - `End` → **End Date**, same custom format `yyyyMMddHHmm`
-     - `Value` → the sample's **Sleep Value** (on some iOS versions it's called just **Value**)
-     - the commas are typed literally between the variables
-
-3. **Combine Text** — combine **Repeat Results** with separator **Custom** → `;`
-
-4. **URL Encode** — input: the Combined Text. (Mode: Encode.)
-
-5. **Text** — build the final link (one line):
-
-   ```
-   https://thisconnor.github.io/sleeptracker-/#v=1&need=480&d=
+   ```js
+   SUPABASE_URL: 'https://xxxx.supabase.co',
+   SUPABASE_ANON_KEY: 'eyJ...',
    ```
 
-   followed immediately by the **URL Encoded Text** variable. Replace `480` with *your* sleep need in **minutes** (480 = 8h, 450 = 7h 30m…). This keeps your setting in the link itself, so Safari can never forget it.
+   Commit and push — the anon key is designed to be public; every table is locked down per-user by the row-level-security policies from step 2.
+5. Reload the app → create your account. Friends do the same.
 
-6. **Open URLs** — input: the Text from step 5.
+   *Invite-only option:* in **Authentication → Sign In / Up**, disable **Allow new users to sign up**, and invite by email from **Authentication → Users → Invite**.
 
-The first run will ask permission to read Sleep data from Health — allow it.
+**Free-tier note**: Supabase pauses free projects after ~7 days with zero traffic. Daily check-ins keep it awake; if it ever pauses, un-pause it from the dashboard in one click.
 
-> **Tip:** add the Shortcut to your Home Screen or an Action-button/Back-tap gesture, and run it with your morning coffee.
+### 3. The calendar link (optional, ~5 minutes)
 
-### 3. Set your sleep need
+Only needed if you want day-aware nap windows and bedtime (your first event anchors the day; tomorrow's first event pulls your wake target earlier when needed).
 
-Open the page's ⚙ settings: adjust your need in 15-minute steps, or accept the suggestion computed from your own data (the 75th percentile of your last two weeks — "your longest typical nights"). Then copy the snippet shown there into the Shortcut's step-5 Text so the setting is permanent.
+1. [Google Cloud Console](https://console.cloud.google.com) → new project → **APIs & Services → Library** → enable **Google Calendar API**.
+2. **OAuth consent screen**: External → fill the three required fields → add yourself (and friends) under **Test users**. (Staying in "testing" mode is fine for personal use.)
+3. **Credentials → Create credentials → OAuth client ID → Web application**, and add `https://thisconnor.github.io` to **Authorized JavaScript origins**.
+4. Put the client ID in `js/config.js` → `GOOGLE_CLIENT_ID`. Push, reload, and **Settings → Google Calendar → Link**.
 
-## Everyday use
+The token lives in your browser's session storage. Nothing calendar-related is ever written to Supabase.
 
-Wake up → run the Shortcut → read your morning. That's the whole product.
+### 4. The iPhone Shortcut (5 minutes)
 
-- **Demo:** open `…/#demo` (or tap *See it with demo data*). Variants: `#demo=iphone`, `#demo=watch`, `#demo=messy`.
-- **Paste fallback:** the welcome screen and settings sheet accept a pasted link (or just its data part) if you'd rather copy than open.
+Open **Shortcuts** → **+** → name it *Sleep Check-in* → add six actions:
+
+1. **Find Health Samples** — type **Sleep Analysis**; filter **Start Date** → **is in the last** → **14 days**; sort by **Start Date**, **Oldest First**.
+2. **Repeat with Each** — inside it, one **Text** action containing `Start,End,Value` where `Start`/`End` are the Repeat Item's **Start Date** / **End Date** with **Date Format: Custom** = `yyyyMMddHHmm`, and `Value` is the item's **Sleep Value** (called **Value** on some iOS versions). Type the commas literally.
+3. **Combine Text** — Repeat Results, separator **Custom** `;`.
+4. **URL Encode** — the combined text.
+5. **Text** — `https://thisconnor.github.io/sleeptracker-/#v=1&need=480&d=` followed by the URL-encoded token. (Replace `480` with your sleep need in minutes; Settings shows this exact snippet with your current need filled in.)
+6. **Open URLs**.
+
+Run it each morning: signed in, the new nights sync into your account and the link data is cleared from the address bar; history builds up night after night.
 
 ## How the math works
 
-- **Sleep debt** = exponentially weighted shortfall over 14 nights: weight `e^(-i/7)` for the night `i` days ago, scaled so a uniform shortfall reads as its true cumulative hours. Last night carries ~15% of the total. Missing nights count as zero deficit (and are flagged), oversleep offsets debt, the total clamps at 0.
-- **Energy schedule** is anchored to today's wake time (or, before any data lands, your average recent wake): sleep inertia ~90 min, morning peak ~1.5–4.5h after wake, afternoon dip ~7–9.5h after wake, evening peak, then wind-down toward your predicted bedtime (`wake + 24h − need`). The **melatonin window** is the hour starting 2h before that bedtime.
-- **Night assembly** is the careful part: overlapping records from multiple sources (iPhone + Watch) are union-merged so nothing double-counts, `Awake` spans are carved out, sleep separated by less than 90 minutes is one night, short daytime sleeps are naps, and every session belongs to the calendar day you woke up.
+- **Sleep debt** — rolling 14 nights, weights `e^(-i/7)` (last night ≈ 15%), scaled so a uniform shortfall reads as true cumulative hours; ≤ 5h is the good zone. Naps repay debt, oversleep offsets it, missing nights are flagged rather than counted, and Settings offers a plain-cumulative alternative.
+- **Tonight's plan** — bedtime = wake target − (need + repayment). Repayment is ~⅕ of current debt in 15-minute steps, capped at +60 min/night (extending much past an hour mostly buys shallow sleep). Wake target priority: tomorrow's first calendar event − prep buffer, your explicit setting (the earlier of the two wins), your average wake, else 7:00. Caffeine cutoff = bedtime − 10h (adjustable 4–14h).
+- **Energy schedule** — anchored to today's wake; the afternoon dip is centered ~12h after your circadian midpoint (mid-sleep), clamped to 6.5–9.5h after wake, and damped if you've napped. Peaks damp as debt grows. The melatonin window is the hour ending 1h before predicted bedtime.
+- **Night assembly** — imported Health samples are union-merged across sources (iPhone + Watch never double-count), `Awake` spans are carved out, gaps under 90 min stay one night, short daytime sessions are naps, and each session belongs to the day you woke. Imports are de-duplicated by interval hash *and* overlap, so re-running the Shortcut is always safe; edited rows keep blocking their original import, and deletions leave tombstones so nothing resurrects.
 
 ## Development
 
-No build step, no dependencies. Plain ES modules.
+No build step, no dependencies (Supabase's client loads from a CDN only when configured).
 
 ```sh
-python3 -m http.server 8000     # then open http://localhost:8000
-node tests/tests.js             # run the unit tests (39 of them)
+python3 -m http.server 8000     # open http://localhost:8000
+node tests/tests.js             # 53 unit tests
 ```
 
-`tests/tests.html` runs the same tests in a browser. The pure logic lives in `js/parse.js`, `js/sessions.js`, `js/metrics.js`, `js/schedule.js`, `js/settings.js` — none of them touch the DOM.
+`#demo` loads six weeks of synthetic data (`#demo=iphone` for the stage-less variant). Pure logic lives in `js/{parse,sessions,store,metrics,schedule,planner,settings}.js` — no DOM imports, all node-testable. UI lives in `js/ui/`.
 
 ## Troubleshooting
 
-- **"N rows couldn't be read"** — almost always the date format. In the Shortcut's step 2, both dates must use **Custom** format `yyyyMMddHHmm`. (The parser also accepts most natural date strings, but commas inside them break the row format.)
-- **Everything shows as time-in-bed** — your iPhone is logging only "In Bed" records. The page falls back to those and says so. An Apple Watch (or third-party sleep app writing "Asleep" records) fixes it.
-- **The link does nothing / page is blank** — make sure GitHub Pages is enabled (setup step 1) and the URL in Shortcut step 5 matches your Pages URL exactly, including the trailing `-/`.
-- **Settings forgotten** — Safari clears site storage after 7 days without a visit. Put `need=` in the Shortcut link (step 5) and it can never be lost.
-
-## Privacy
-
-Sleep data is health data. This tool keeps it in the URL fragment, which never leaves your device, and stores nothing anywhere else. Two things to know: the link in your Safari history contains your sleep data, and anyone you *send* the link to could read it. Don't share check-in links.
+- **"N rows couldn't be read"** — the Shortcut's date format must be **Custom** `yyyyMMddHHmm` on both date tokens.
+- **Magic link lands on a blank page** — the Site URL / Redirect URLs in Supabase (setup step 2.3) must exactly match the Pages URL, trailing `-/` included.
+- **Calendar popup closes with an error** — your Google OAuth client's *Authorized JavaScript origins* must include `https://thisconnor.github.io`, and your account must be listed as a test user.
+- **Everything shows as time-in-bed** — your iPhone logs only "In Bed" records; the app says so and falls back. An Apple Watch (or any app writing "Asleep" records) upgrades this automatically, including the Deep/Core/REM breakdown.
+- **Data vanished in local mode** — Safari clears browser storage after 7 quiet days. Local mode is a convenience; accounts exist precisely so this can't happen.
