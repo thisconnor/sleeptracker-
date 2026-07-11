@@ -135,16 +135,6 @@
 
     <!-- ------------------------------------------------------- Today -->
     <section id="view-today" class="view" hidden>
-      <article class="card" id="welcome-card" hidden>
-        <p class="card-label">Welcome</p>
-        <h2 class="welcome-title">Your morning sleep check-in</h2>
-        <p class="lede">Run the iOS Shortcut after you wake — it reads your last 14 days of Apple Health sleep and opens this page with everything it needs. Sessions sync to your log, so history builds up night after night.</p>
-        <div class="btn-row">
-          <button class="btn primary" data-action="try-demo">See it with demo data</button>
-          <a class="btn" href="https://github.com/thisconnor/sleeptracker-#set-up-the-iphone-shortcut" target="_blank" rel="noopener">Set up the Shortcut</a>
-        </div>
-      </article>
-
       <section class="open-block hero" id="debt-hero">
         <div class="debt-aura" aria-hidden="true"></div>
         <div class="card-head">
@@ -219,6 +209,19 @@
           <span class="sub" id="friends-sub"></span>
         </div>
         <div id="friends-body"></div>
+      </article>
+
+      <article class="card" id="welcome-card" hidden>
+        <div class="card-head">
+          <p class="card-label">Get started</p>
+          <button class="icon-btn sm" data-action="dismiss-welcome" aria-label="Hide this card" title="Hide"><span data-icon="x"></span></button>
+        </div>
+        <h2 class="welcome-title">Add your sleep, your way</h2>
+        <p class="lede">Tap <em>Going to sleep</em> tonight and the live timer does the rest, add nights by hand in the Sleep tab — or set up the iOS Shortcut once and your last 14 days of Apple Health sleep sync automatically every morning.</p>
+        <div class="btn-row">
+          <a class="btn primary" href="https://github.com/thisconnor/sleeptracker-#set-up-the-iphone-shortcut" target="_blank" rel="noopener">Set up the Shortcut</a>
+          <button class="btn" data-action="try-demo">See a demo</button>
+        </div>
       </article>
 
       <p class="footnote" id="data-note" hidden></p>

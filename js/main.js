@@ -30,6 +30,7 @@ const TREND_DETAIL_KEY = 'trendDetail.v1';
 const ONBOARDED_KEY = 'onboarded.v1';
 const CELEBRATED_KEY = 'celebrated.v1';
 const STATS_PUSH_KEY = 'statsPushedAt.v1';
+const WELCOME_DISMISSED_KEY = 'welcomeDismissed.v1';
 
 const state = {
   api: null,
@@ -125,7 +126,8 @@ function compute() {
 function render() {
   const vm = compute();
   ui.setTopbar(state.view, vm, { isDemo: isDemo() });
-  $('welcome-card').hidden = activeRows().some((r) => !r.deleted);
+  $('welcome-card').hidden = activeRows().some((r) => !r.deleted)
+    || safeGet(WELCOME_DISMISSED_KEY) === '1';
   if (state.view === 'today') {
     $('view-subtitle').textContent = ui.greetingSubtitle(vm.now, vm.freshness);
     const name = state.settings.displayName?.trim()
@@ -482,6 +484,11 @@ function bindEvents() {
     else if (a === 'goto-sleep') switchView('sleep');
     else if (a === 'exit-demo') exitDemo();
     else if (a === 'try-demo') { location.hash = 'demo'; }
+    else if (a === 'dismiss-welcome') {
+      safeSet(WELCOME_DISMISSED_KEY, '1');
+      $('welcome-card').hidden = true;
+      ui.toast('Hidden — the Shortcut guide stays in Settings and the README');
+    }
     else if (a === 'timer-start') startTimer(el.dataset.kind);
     else if (a === 'timer-finish') finishTimer();
     else if (a === 'timer-discard') discardTimer();

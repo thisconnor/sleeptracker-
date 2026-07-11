@@ -268,6 +268,9 @@ body {
 
 .icon-btn:active { transform: scale(0.96); }
 
+.icon-btn.sm { width: 30px; height: 30px; }
+.icon-btn.sm svg { width: 13px; height: 13px; }
+
 .btn {
   display: inline-flex;
   align-items: center;
