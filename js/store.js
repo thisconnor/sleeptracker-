@@ -172,6 +172,30 @@ export function rowToSessionView(row) {
   };
 }
 
+// ---- live timer reconciliation ----
+
+export const TIMER_MAX_AGE_MS = 24 * 3600e3;
+
+const timerFresh = (t, now) => {
+  if (!t?.startedAt || !['sleep', 'nap'].includes(t.kind)) return false;
+  const age = now.getTime() - new Date(t.startedAt).getTime();
+  return age < TIMER_MAX_AGE_MS && age > -60000;
+};
+
+// Decide which live timer wins between this device's cache and the
+// account's server-side copy. The server is authoritative (it's what other
+// devices see); a fresh local-only timer gets pushed up; stale server
+// timers get cleared.
+export function reconcileTimer(localTimer, serverTimer, now = new Date()) {
+  if (timerFresh(serverTimer, now)) {
+    return { timer: serverTimer, pushToServer: false, clearServer: false };
+  }
+  if (timerFresh(localTimer, now)) {
+    return { timer: localTimer, pushToServer: true, clearServer: false };
+  }
+  return { timer: null, pushToServer: false, clearServer: Boolean(serverTimer?.startedAt) };
+}
+
 // ---- (de)serialization used by local mode and the API layer ----
 
 export function rowToJSON(r) {

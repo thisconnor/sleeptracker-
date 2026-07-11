@@ -10,6 +10,7 @@ import { bedtimePlan, napSuggestions, busyBlocks } from './planner.js';
 import { demoStoreRows } from './demo.js';
 import {
   sessionsToRows, mergeImport, nightsFromRows, applyEdit, makeManualRow,
+  reconcileTimer,
 } from './store.js';
 import { initApi, DEFAULT_SETTINGS } from './api.js';
 import * as cal from './calendar.js';
@@ -216,6 +217,7 @@ async function refreshCalendar({ interactive = false } = {}) {
 
 async function enterApp() {
   ui.showApp();
+  adoptTimer();
   await handleFragment({ announce: true });
   if (state.pendingImport && canWrite()) {
     await importRows(state.pendingImport);
@@ -263,7 +265,7 @@ async function onSignedIn(user) {
 async function boot() {
   ui.injectIcons();
   bindEvents();
-  state.timer = readTimer();
+  state.timer = readLocalTimer();
   state.trendDetail = safeGet(TREND_DETAIL_KEY) === 'advanced' ? 'advanced' : 'clean';
   state.api = await initApi();
   state.settings = await state.api.settings.load();
@@ -574,21 +576,46 @@ async function deleteEditor() {
 
 // ---------------------------------------------------------- live logging
 
-function readTimer() {
+function readLocalTimer() {
   try {
     const t = JSON.parse(safeGet(TIMER_KEY));
-    if (t?.startedAt && ['sleep', 'nap'].includes(t.kind)) {
-      // A forgotten timer older than 24h is stale, not a sleep record.
-      if (Date.now() - new Date(t.startedAt).getTime() < 24 * 3600e3) return t;
-    }
+    if (t?.startedAt && ['sleep', 'nap'].includes(t.kind)) return t;
   } catch { /* ignore */ }
   return null;
 }
 
+// Persist the timer locally (offline cache) AND to the account when signed
+// in, so a timer started on the phone can be finished on any device.
+function writeTimer(timer) {
+  state.timer = timer;
+  if (timer) safeSet(TIMER_KEY, JSON.stringify(timer));
+  else safeDel(TIMER_KEY);
+  if (state.api?.mode === 'supabase' && state.user) {
+    state.api.settings
+      .save({ timerStartedAt: timer?.startedAt ?? null, timerKind: timer?.kind ?? null })
+      .then((s) => { state.settings = s; })
+      .catch(() => { /* offline — the local cache still carries it */ });
+  }
+}
+
+// On entry (boot or sign-in), merge this device's cached timer with the
+// account's copy. The server wins; a fresh local-only timer is pushed up.
+function adoptTimer() {
+  const serverTimer = state.settings.timerStartedAt
+    ? { startedAt: state.settings.timerStartedAt, kind: state.settings.timerKind ?? 'sleep' }
+    : null;
+  const { timer, pushToServer, clearServer } = reconcileTimer(readLocalTimer(), serverTimer);
+  state.timer = timer;
+  if (timer) safeSet(TIMER_KEY, JSON.stringify(timer));
+  else safeDel(TIMER_KEY);
+  if ((pushToServer || clearServer) && state.api?.mode === 'supabase' && state.user) {
+    writeTimer(timer);
+  }
+}
+
 function startTimer(kind) {
   if (isDemo()) { ui.toast('Exit the demo first', 'warn'); return; }
-  state.timer = { startedAt: new Date().toISOString(), kind: kind === 'nap' ? 'nap' : 'sleep' };
-  safeSet(TIMER_KEY, JSON.stringify(state.timer));
+  writeTimer({ startedAt: new Date().toISOString(), kind: kind === 'nap' ? 'nap' : 'sleep' });
   ui.toast(kind === 'nap' ? 'Nap timer running — tap "I\'m awake" after' : 'Sleep timer running — see you in the morning');
   render();
 }
@@ -618,18 +645,16 @@ function finishTimer() {
 }
 
 function discardTimer() {
-  state.timer = null;
   state.timerPending = false;
-  safeDel(TIMER_KEY);
+  writeTimer(null);
   ui.toast('Timer discarded');
   render();
 }
 
 function clearTimerAfterSave() {
   if (!state.timerPending) return;
-  state.timer = null;
   state.timerPending = false;
-  safeDel(TIMER_KEY);
+  writeTimer(null);
 }
 
 // Keep the elapsed readout fresh while a timer runs.

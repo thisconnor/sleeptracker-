@@ -17,7 +17,7 @@ import { clampNeed, resolveNeed, DEFAULT_NEED_MIN } from '../js/settings.js';
 import { demoRows, makeDemoFragment, demoStoreRows } from '../js/demo.js';
 import {
   hashInterval, sessionsToRows, mergeImport, applyEdit, makeManualRow,
-  nightsFromRows, rowToJSON, rowFromJSON,
+  nightsFromRows, rowToJSON, rowFromJSON, reconcileTimer,
 } from '../js/store.js';
 import {
   repaymentExtraMin, resolveWakeTarget, bedtimePlan, busyBlocks,
@@ -537,6 +537,36 @@ test('store row JSON round-trip', () => {
   assertEq(back.kind, a.kind);
   assertEq(back.stages.deep, 2);
   assertEq(back.importHash, a.importHash);
+});
+
+test('timer reconciliation: server wins, fresh local pushes up, stale clears', () => {
+  const fresh = (minAgo, kind = 'sleep') => ({
+    startedAt: new Date(NOW.getTime() - minAgo * MIN).toISOString(),
+    kind,
+  });
+  const stale = fresh(25 * 60); // 25h old
+
+  const serverWins = reconcileTimer(fresh(30, 'nap'), fresh(200, 'sleep'), NOW);
+  assertEq(serverWins.timer.kind, 'sleep', 'server copy is authoritative');
+  assertEq(serverWins.pushToServer, false);
+
+  const localOnly = reconcileTimer(fresh(30, 'nap'), null, NOW);
+  assertEq(localOnly.timer.kind, 'nap');
+  assertEq(localOnly.pushToServer, true, 'fresh local-only timer syncs up');
+
+  const staleServer = reconcileTimer(null, stale, NOW);
+  assertEq(staleServer.timer, null);
+  assertEq(staleServer.clearServer, true, 'stale server timer gets cleared');
+
+  const nothing = reconcileTimer(null, null, NOW);
+  assertEq(nothing.timer, null);
+  assertEq(nothing.clearServer, false);
+
+  const staleLocalFreshServer = reconcileTimer(stale, fresh(100), NOW);
+  assertEq(staleLocalFreshServer.timer.kind, 'sleep');
+
+  const badKind = reconcileTimer({ startedAt: fresh(30).startedAt, kind: 'weird' }, null, NOW);
+  assertEq(badKind.timer, null, 'unknown kind is invalid');
 });
 
 // --------------------------------------------------------------- planner
